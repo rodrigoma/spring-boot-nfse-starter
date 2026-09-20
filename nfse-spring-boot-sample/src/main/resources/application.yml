@@ -1,0 +1,18 @@
+nfse:
+  environment: RESTRICTED_PRODUCTION
+  certificate:
+    pfx-path: /path/to/certificado-a1.pfx      # Set the emitter's ICP-Brasil A1 certificate before running
+    password: ${NFSE_CERTIFICATE_PASSWORD:}
+  emitter:
+    cnpj: "00000000000000"                     # Emitter CNPJ (digits only or formatted)
+    municipal-registration: "0000000"
+    municipality-ibge: 3550308                 # IBGE code of the emitter's municipality
+    tax-regime:
+      simples-nacional: NOT_OPTING             # NOT_OPTING | MEI | ME_EPP
+      special-regime: NONE
+    dps-series: 1
+  log-requests: true
+
+logging:
+  level:
+    io.github.rodrigoma.nfse: DEBUG
