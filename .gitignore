@@ -1,0 +1,32 @@
+# Build output
+build/
+
+# Gradle
+.gradle/
+
+# IDE
+.DS_Store
+.idea/
+*.iml
+.settings/
+.project
+.classpath
+
+# JARs — keep gradle wrapper and built artifacts in src/main
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/*.jar
+
+# Git worktrees
+.worktrees/
+
+# Claude Code
+.claude/
+
+# Maven build output
+target/
+
+# Kotlin 2.x compiler session data
+.kotlin/
+buildSrc/.kotlin/
+docs/*.pdf

@@ -1,0 +1,46 @@
+build:
+  maxIssues: 0
+
+config:
+  validation: true
+  warningsAsErrors: false
+
+complexity:
+  LongParameterList:
+    active: true
+    functionThreshold: 6
+    constructorThreshold: 7
+  TooManyFunctions:
+    active: true
+    thresholdInFiles: 20
+    thresholdInClasses: 15
+    thresholdInInterfaces: 15
+    thresholdInObjects: 15
+    thresholdInEnums: 10
+
+naming:
+  FunctionNaming:
+    active: true
+    excludes:
+      - '**/test/**'
+      - '**/*Test*'
+      - '**/*Spec*'
+
+style:
+  MagicNumber:
+    active: true
+    excludes:
+      - '**/test/**'
+      - '**/*Test*'
+    ignoreNumbers:
+      - '-1'
+      - '0'
+      - '1'
+      - '2'
+      - '100'
+    ignoreEnums: true
+    ignoreRanges: true
+  WildcardImport:
+    active: true
+    excludeImports:
+      - 'kotlinx.coroutines.*'
