@@ -276,6 +276,31 @@ nfse:
 The library's own integration tests do exactly this with the JDK `HttpsServer` and certificates minted at test time
 (`nfse-spring-boot-autoconfigure/src/test/kotlin/.../support/NfseStubServer.kt`).
 
+### Local sandbox (no certificate needed)
+
+The sample application ships a fake Sefin Nacional for the `local` profile: it mints a sandbox "e-CNPJ" and a
+`localhost` certificate under `build/local-sefin/`, starts an HTTPS server that **requires the client certificate**,
+validates every DPS/event against the XSD, verifies the XML signature, keeps notes and events in memory and serves a
+placeholder DANFSE. The starter is pointed at it automatically:
+
+```bash
+./gradlew :nfse-spring-boot-sample:bootRun --args='--spring.profiles.active=local'
+```
+
+```bash
+curl -s -X POST localhost:8080/sample/nfse -H 'Content-Type: application/json' \
+  -d '{"takerDocument":"123.456.789-09","takerName":"Fulano","nationalTaxCode":"010701","description":"Consultoria","amount":1500,"rate":2}'
+# then, with the returned accessKey:
+curl -s localhost:8080/sample/nfse/<accessKey>                      # the NFS-e
+curl -s -X DELETE localhost:8080/sample/nfse/<accessKey> -H 'Content-Type: application/json' \
+  -d '{"justification":"Nota emitida com valor incorreto"}'          # cancellation event
+curl -s localhost:8080/sample/nfse/<accessKey>/events
+curl -s localhost:8080/sample/nfse/<accessKey>/danfse -o danfse.pdf
+```
+
+Rejections come back with real codes (`E0014` duplicate DPS, `E0840` already cancelled, `E1235` schema, `E0714`
+signature). It exercises the library exactly as production does — only the fiscal rules of Anexo I are not there.
+
 ### Restricted production
 
 1. Ask your municipality to enable the emitter in the **produção restrita** environment (it has its own registry).

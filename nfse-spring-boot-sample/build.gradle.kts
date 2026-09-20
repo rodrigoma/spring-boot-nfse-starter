@@ -9,6 +9,8 @@ version = rootProject.version
 dependencies {
     implementation(project(":nfse-spring-boot-starter"))
     implementation("org.springframework.boot:spring-boot-starter-web")
+    // Only for the `local` profile: mints the sandbox certificates (the JDK has no public API for that)
+    implementation("org.bouncycastle:bcpkix-jdk18on:1.80")
 }
 
 // Spring Boot produces the fat jar; disable the plain jar task

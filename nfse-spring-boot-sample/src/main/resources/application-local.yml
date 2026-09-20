@@ -1,0 +1,9 @@
+# `local` profile: the fake Sefin started by Application.main supplies certificate paths and base URLs.
+nfse:
+  emitter:
+    cnpj: "12345678000195"
+    municipal-registration: "12345"
+    municipality-ibge: 3548807
+    tax-regime:
+      simples-nacional: NOT_OPTING
+  log-requests: true

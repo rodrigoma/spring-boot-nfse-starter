@@ -16,4 +16,5 @@ Initial release candidate.
 - Auto-configuration from `nfse.*`: ICP-Brasil A1 certificate loading with startup checks (validity, v3, not a CA,
   key usages, CNPJ/CPF extension), mutual-TLS `RestClient` (`nfseRestClient`, `NfseRestClientCustomizer`), typed
   `NfseException` hierarchy, opt-in request logging with payload masking, opt-in Actuator health indicator.
-- Sample application emitting a demo NFS-e in restricted production.
+- Sample application emitting a demo NFS-e in restricted production, with a `local` profile that runs the whole
+  flow against an in-process fake Sefin Nacional (mTLS, XSD validation, signature verification).
