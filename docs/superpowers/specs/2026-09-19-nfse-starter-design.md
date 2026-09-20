@@ -31,7 +31,10 @@ question. Rodrigo authorized these decisions to be taken autonomously.
 - `pAliq` max 5 % (E0595), pattern `TSDec1V2`; money is `TSDec15V2` with exactly 2 decimals.
 - Cancellation event = `e101101` with fixed `xDesc="Cancelamento de NFS-e"`, `cMotivo` ∈ {1 Erro na emissão,
   2 Serviço não prestado, 9 Outros}, `xMotivo` 15–255 chars (mandatory). Pedido id = `"PRE"` + access
-  key(50) + event type(6) + `nPedRegEvento`(3). Signed with the emitter's certificate (E1991).
+  key(50) + event type(6) — the prose of Anexo II adds `nPedRegEvento`(3), but the XSD pattern `PRE[0-9]{56}`
+  and `maxLength` 59 do not; the schema wins. Signed with the emitter's certificate (E1991).
+- `TSSerieDPS` v1.01 declares `^0{0,4}\d{1,5}$`; `^`/`$` are literals in XSD regex, so the embedded copy uses
+  `0{0,4}\d{1,5}` (see README → Notes on the official docs).
 - Certificate rules (Anexo I): X.509 v3, not a CA, KeyUsage `digitalSignature` + `nonRepudiation`
   (signature) and `clientAuth` EKU (transport), ICP-Brasil chain, CNPJ/CPF in `otherName` OID
   `2.16.76.1.3.3` / `2.16.76.1.3.1`.
@@ -79,7 +82,7 @@ interface NfseClient {
     fun get(accessKey: String): Nfse
     fun accessKeyOf(dpsId: DpsId): String?          // null on 404
     fun exists(dpsId: DpsId): Boolean               // HEAD
-    fun cancel(accessKey: String, reason: CancellationReason, justification: String, sequence: Int = 1): NfseEvent
+    fun cancel(accessKey: String, reason: CancellationReason, justification: String): NfseEvent
     fun events(accessKey: String): List<NfseEvent>
     fun danfse(accessKey: String): ByteArray
     fun municipalAgreement(municipalityIbge: Int): MunicipalParameters
@@ -108,7 +111,7 @@ interface NfseClient {
 `emitter.tax-regime.simples-nacional` (`NOT_OPTING` | `MEI` | `ME_EPP`), `emitter.tax-regime.simples-nacional-assessment`
 (`SIMPLES_NACIONAL` | `FEDERAL_ONLY` | `NONE`), `emitter.tax-regime.special-regime` (`NONE`, `COOPERATIVE`,
 `ESTIMATE`, `MUNICIPAL_MICRO_ENTERPRISE`, `NOTARY`, `SELF_EMPLOYED_PROFESSIONAL`, `PROFESSIONAL_COMPANY`,
-`OTHER`), `emitter.dps-series` (default 1), `application-version`, `signature.algorithm`, `log-requests`,
+`OTHER`), `emitter.dps-series` (default 1), `application-version`, `log-requests`,
 `health-indicator-enabled`, `connect-timeout`, `read-timeout`, `base-url.sefin`, `base-url.danfse`.
 
 Validation happens in `afterPropertiesSet` (properties) and in `NfseCertificate` (certificate, at startup).
