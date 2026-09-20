@@ -326,7 +326,8 @@ success, `OUT_OF_SERVICE` when the certificate is refused, `DOWN` otherwise.
 
 Decisions taken where the documentation (Emissor Público API manual v1.2, Anexo I/II v1.01, XSD v1.01 of
 2026-02-09) is silent or inconsistent. The Swagger of the restricted-production environment is only reachable with a
-certificate; check these against it when you have one.
+certificate; `scripts/fetch-swagger.sh /path/to/certificado.pfx` downloads the specs with yours and prints the
+paths and schema fields to compare with the list below.
 
 - **JSON field names.** `dpsXmlGZipB64` (request), `nfseXmlGZipB64`, `chaveAcesso`, `idDps`,
   `dataHoraProcessamento` (responses), `pedidoRegistroEventoXmlGZipB64` / `eventoXmlGZipB64` (events) and
