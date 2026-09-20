@@ -30,3 +30,4 @@ target/
 .kotlin/
 buildSrc/.kotlin/
 docs/*.pdf
+!docs/nt-008-danfse-v1-02.pdf
