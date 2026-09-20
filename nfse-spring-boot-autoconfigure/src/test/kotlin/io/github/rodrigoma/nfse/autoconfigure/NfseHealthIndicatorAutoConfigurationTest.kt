@@ -1,6 +1,8 @@
 package io.github.rodrigoma.nfse.autoconfigure
 
 import io.github.rodrigoma.nfse.exception.NfseException
+import io.github.rodrigoma.nfse.model.dps.DpsId
+import io.github.rodrigoma.nfse.model.dps.FederalId
 import io.github.rodrigoma.nfse.support.TestCertificates
 import io.github.rodrigoma.nfse.support.TestDps
 import org.assertj.core.api.Assertions.assertThat
@@ -72,12 +74,13 @@ class NfseHealthIndicatorAutoConfigurationTest {
                 }.defaultStatusHandler({ it.isError }) { _, _ ->
                     throw failure ?: NfseException.Unavailable("down", status.value())
                 }.build()
-        return NfseHealthIndicator(restClient, TestDps.MUNICIPALITY)
+        return NfseHealthIndicator(restClient, DpsId(TestDps.MUNICIPALITY, FederalId.Cnpj(TestDps.CNPJ), 1, 1))
     }
 
     @Test
     fun `reports up, out of service on unauthorized and down otherwise`() {
         assertThat(indicator(HttpStatus.OK).health().status).isEqualTo(Status.UP)
+        assertThat(indicator(HttpStatus.NOT_FOUND, NfseException.NotFound()).health().status).isEqualTo(Status.UP)
         val unauthorized = indicator(HttpStatus.FORBIDDEN, NfseException.Unauthorized(403, "no"))
         assertThat(unauthorized.health().status).isEqualTo(Status.OUT_OF_SERVICE)
         assertThat(indicator(HttpStatus.BAD_GATEWAY).health().status).isEqualTo(Status.DOWN)

@@ -66,9 +66,11 @@ class NfseAutoConfiguration(
         customizers: ObjectProvider<NfseRestClientCustomizer>,
     ): RestClient {
         val errorHandler = NfseErrorHandler(objectMapper)
+        // The Sefin Nacional refuses HTTP/2 on authenticated paths (HTTP_1_1_REQUIRED); never negotiate h2.
         val httpClient =
             HttpClient
                 .newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
                 .sslContext(NfseSslContextFactory.create(certificate, properties.certificate))
                 .connectTimeout(properties.connectTimeout)
                 .build()

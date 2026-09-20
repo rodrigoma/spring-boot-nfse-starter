@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.mock.http.client.MockClientHttpResponse
 import tools.jackson.databind.MapperFeature
 import tools.jackson.module.kotlin.jacksonMapperBuilder
+import java.time.Duration
 
 class NfseErrorHandlerTest {
     private val handler =
@@ -57,6 +58,47 @@ class NfseErrorHandlerTest {
     }
 
     @Test
+    fun `the single erro object of ResponseErro is parsed too`() {
+        val body = """{"tipoAmbiente":2,"erro":{"codigo":"E0002","descricao":"Chave inválida","complemento":null}}"""
+        assertThatThrownBy { handler.handle(response(HttpStatus.BAD_REQUEST, body)) }
+            .isInstanceOf(NfseException.Rejected::class.java)
+            .satisfies(
+                {
+                    assertThat(
+                        (it as NfseException.Rejected).errors,
+                    ).containsExactly(NfseError("E0002", "Chave inválida"))
+                },
+            )
+        assertThatThrownBy { handler.handle(response(HttpStatus.NOT_FOUND, body)) }
+            .isInstanceOf(NfseException.NotFound::class.java)
+            .hasMessage("Chave inválida")
+        assertThatThrownBy { handler.handle(response(HttpStatus.NOT_FOUND, """{"mensagem":"Nada aqui"}""")) }
+            .hasMessage("Nada aqui")
+        assertThatThrownBy {
+            handler.handle(
+                response(HttpStatus.BAD_REQUEST, """{"mensagem":"Competência inválida"}"""),
+            )
+        }.hasMessageContaining("HTTP_400: Competência inválida")
+    }
+
+    @Test
+    fun `429 becomes Unavailable with Retry-After in seconds or as an HTTP date`() {
+        val seconds = response(HttpStatus.TOO_MANY_REQUESTS).apply { headers.add("Retry-After", "30") }
+        assertThatThrownBy { handler.handle(seconds) }
+            .isInstanceOf(NfseException.Unavailable::class.java)
+            .satisfies({ assertThat((it as NfseException.Unavailable).retryAfter).isEqualTo(Duration.ofSeconds(30)) })
+        val past =
+            response(
+                HttpStatus.TOO_MANY_REQUESTS,
+            ).apply { headers.add("Retry-After", "Wed, 21 Oct 2015 07:28:00 GMT") }
+        assertThatThrownBy { handler.handle(past) }
+            .satisfies({ assertThat((it as NfseException.Unavailable).retryAfter).isEqualTo(Duration.ZERO) })
+        val garbage = response(HttpStatus.TOO_MANY_REQUESTS).apply { headers.add("Retry-After", "soon") }
+        assertThatThrownBy { handler.handle(garbage) }
+            .satisfies({ assertThat((it as NfseException.Unavailable).retryAfter).isNull() })
+    }
+
+    @Test
     fun `401 and 403 become Unauthorized`() {
         assertThatThrownBy { handler.handle(response(HttpStatus.UNAUTHORIZED)) }
             .isInstanceOf(NfseException.Unauthorized::class.java)
@@ -74,6 +116,7 @@ class NfseErrorHandlerTest {
         assertThatThrownBy { handler.handle(response(HttpStatus.TOO_MANY_REQUESTS)) }
             .isInstanceOf(NfseException.Unavailable::class.java)
             .satisfies({ assertThat((it as NfseException.Unavailable).statusCode).isEqualTo(429) })
+            .satisfies({ assertThat((it as NfseException.Unavailable).retryAfter).isNull() })
         assertThatThrownBy { handler.handle(response(HttpStatus.BAD_GATEWAY)) }
             .isInstanceOf(NfseException.Unavailable::class.java)
             .hasMessageContaining("502")

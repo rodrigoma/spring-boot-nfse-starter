@@ -2,13 +2,16 @@ package io.github.rodrigoma.nfse.client
 
 import io.github.rodrigoma.nfse.autoconfigure.NfseProperties
 import io.github.rodrigoma.nfse.certificate.NfseCertificate
+import io.github.rodrigoma.nfse.exception.NfseError
 import io.github.rodrigoma.nfse.exception.NfseException
 import io.github.rodrigoma.nfse.model.dps.Dps
 import io.github.rodrigoma.nfse.model.dps.DpsId
+import io.github.rodrigoma.nfse.model.dps.FederalId
 import io.github.rodrigoma.nfse.model.event.CancellationReason
 import io.github.rodrigoma.nfse.model.event.NfseEvent
+import io.github.rodrigoma.nfse.model.event.NfseEventType
 import io.github.rodrigoma.nfse.model.request.DpsRequest
-import io.github.rodrigoma.nfse.model.response.MunicipalParameters
+import io.github.rodrigoma.nfse.model.response.DistributionBatch
 import io.github.rodrigoma.nfse.model.response.Nfse
 import io.github.rodrigoma.nfse.model.response.NfseResult
 import io.github.rodrigoma.nfse.xml.CancellationRequest
@@ -19,17 +22,15 @@ import io.github.rodrigoma.nfse.xml.NfseXmlParser
 import io.github.rodrigoma.nfse.xml.XmlSigner
 import io.github.rodrigoma.nfse.xml.XmlSupport
 import org.springframework.http.MediaType
-import org.springframework.web.client.ResourceAccessException
 import org.springframework.web.client.RestClient
-import org.springframework.web.client.RestClientException
 import org.springframework.web.client.body
 import java.net.URI
 import java.time.Clock
 import java.time.OffsetDateTime
 
 /**
- * [NfseClient] over Spring's `RestClient`. The client is expected to be configured with the Sefin base URL, the mTLS
- * request factory and [io.github.rodrigoma.nfse.http.NfseErrorHandler]; DANFSE calls use an absolute URL.
+ * [NfseClient] over Spring's `RestClient`. The client is configured with the Sefin Nacional base URL, the mTLS
+ * request factory and [io.github.rodrigoma.nfse.http.NfseErrorHandler]; ADN calls use absolute URLs.
  */
 @Suppress("LongParameterList")
 class DefaultNfseClient(
@@ -42,15 +43,20 @@ class DefaultNfseClient(
 ) : NfseClient {
     private val assembler = DpsAssembler(properties, clock)
     private val signer: XmlSigner = certificate.signer()
+    private val adn = AdnClient(restClient, properties.resolvedAdnBaseUrl())
+
+    override val municipalParameters: MunicipalParametersClient =
+        DefaultMunicipalParametersClient(restClient, properties.resolvedMunicipalParametersBaseUrl())
 
     override fun emit(request: DpsRequest): NfseResult = emit(assembler.assemble(request))
 
     override fun emit(dps: Dps): NfseResult {
+        DpsPreflight.check(dps)
         val document = dpsXmlBuilder.build(dps)
         signer.sign(document, DpsXmlBuilder.infDps(document), document.documentElement)
         val dpsXml = XmlSupport.serialize(document)
         val response =
-            execute {
+            nfseCall {
                 restClient
                     .post()
                     .uri(NfseApiPaths.NFSE)
@@ -67,29 +73,37 @@ class DefaultNfseClient(
             dpsId = response.idDps ?: dps.id.value,
             nfse = nfse,
             dpsXml = dpsXml,
+            alerts =
+                response.alertas.orEmpty().map {
+                    NfseError(
+                        it.codigo ?: "ALERTA",
+                        it.descricao ?: "",
+                        it.complemento,
+                    )
+                },
         )
     }
 
     override fun get(accessKey: String): Nfse {
         val response =
-            execute {
+            nfseCall {
                 restClient
                     .get()
                     .uri(NfseApiPaths.NFSE_BY_KEY, accessKey)
                     .retrieve()
                     .body<ApiPayloads.NfseResponse>()
-            }
-                ?: throw NfseException.Unavailable("Empty response from GET ${NfseApiPaths.NFSE_BY_KEY}")
+            } ?: throw NfseException.Unavailable("Empty response from GET ${NfseApiPaths.NFSE_BY_KEY}")
         return NfseXmlParser.parseNfse(decode(response.nfseXmlGZipB64, "nfseXmlGZipB64"))
     }
 
+    /** The Sefin expects the full identifier, `DPS` literal included (`docs/specs/sefin-nacional.openapi.json`). */
     override fun accessKeyOf(dpsId: DpsId): String? =
         try {
             val response =
-                execute {
+                nfseCall {
                     restClient
                         .get()
-                        .uri(NfseApiPaths.DPS_BY_ID, dpsId.digits)
+                        .uri(NfseApiPaths.DPS_BY_ID, dpsId.value)
                         .retrieve()
                         .body<ApiPayloads.DpsResponse>()
                 }
@@ -101,10 +115,10 @@ class DefaultNfseClient(
 
     override fun exists(dpsId: DpsId): Boolean =
         try {
-            execute {
+            nfseCall {
                 restClient
                     .head()
-                    .uri(NfseApiPaths.DPS_BY_ID, dpsId.digits)
+                    .uri(NfseApiPaths.DPS_BY_ID, dpsId.value)
                     .retrieve()
                     .toBodilessEntity()
             }
@@ -132,7 +146,7 @@ class DefaultNfseClient(
         signer.sign(document, EventXmlBuilder.infPedReg(document), document.documentElement)
         val eventXml = XmlSupport.serialize(document)
         val response =
-            execute {
+            nfseCall {
                 restClient
                     .post()
                     .uri(NfseApiPaths.EVENTS, accessKey)
@@ -141,22 +155,34 @@ class DefaultNfseClient(
                     .retrieve()
                     .body<ApiPayloads.EventResponse>()
             } ?: throw NfseException.Unavailable("Empty response from POST ${NfseApiPaths.EVENTS}")
-        return toEvent(response, accessKey)
+        return NfseXmlParser.parseEvent(decode(response.eventoXmlGZipB64, "eventoXmlGZipB64"))
     }
 
-    override fun events(accessKey: String): List<NfseEvent> =
-        execute {
-            restClient
-                .get()
-                .uri(NfseApiPaths.EVENTS, accessKey)
-                .retrieve()
-                .body<ApiPayloads.EventListResponse>()
-        }?.items()
-            ?.map { toEvent(it, accessKey) }
-            .orEmpty()
+    override fun event(
+        accessKey: String,
+        type: NfseEventType,
+        sequence: Int,
+    ): NfseEvent {
+        val response =
+            nfseCall {
+                restClient
+                    .get()
+                    .uri(NfseApiPaths.EVENT, accessKey, type.code, sequence)
+                    .retrieve()
+                    .body<ApiPayloads.EventResponse>()
+            } ?: throw NfseException.Unavailable("Empty response from GET ${NfseApiPaths.EVENT}")
+        return NfseXmlParser.parseEvent(decode(response.eventoXmlGZipB64, "eventoXmlGZipB64"))
+    }
+
+    override fun events(accessKey: String): List<NfseEvent> = adn.events(accessKey)
+
+    override fun distribution(
+        nsu: Long,
+        cnpj: String?,
+    ): DistributionBatch = adn.distribution(nsu, cnpj?.let { FederalId.Cnpj(it).value })
 
     override fun danfse(accessKey: String): ByteArray =
-        execute {
+        nfseCall {
             restClient
                 .get()
                 .uri(URI.create("${properties.resolvedDanfseBaseUrl().trimEnd('/')}/$accessKey"))
@@ -165,67 +191,8 @@ class DefaultNfseClient(
                 .body<ByteArray>()
         } ?: throw NfseException.Unavailable("Empty DANFSE response")
 
-    override fun municipalAgreement(municipalityIbge: Int): MunicipalParameters =
-        MunicipalParameters(municipalityIbge, null, fetchParameters(NfseApiPaths.MUNICIPAL_AGREEMENT, municipalityIbge))
-
-    override fun municipalParameters(
-        municipalityIbge: Int,
-        serviceCode: String,
-    ): MunicipalParameters =
-        MunicipalParameters(
-            municipalityIbge,
-            serviceCode,
-            fetchParameters(NfseApiPaths.MUNICIPAL_SERVICE_PARAMETERS, municipalityIbge, serviceCode),
-        )
-
-    private fun fetchParameters(
-        path: String,
-        vararg variables: Any,
-    ): Map<String, Any?> =
-        execute {
-            restClient
-                .get()
-                .uri(path, *variables)
-                .retrieve()
-                .body<Map<String, Any?>>()
-        }.orEmpty()
-
-    private fun toEvent(
-        response: ApiPayloads.EventResponse,
-        accessKey: String,
-    ): NfseEvent =
-        response.eventoXmlGZipB64?.let { NfseXmlParser.parseEvent(GzipBase64.decode(it)) }
-            ?: NfseEvent(
-                id = response.idEvento.orEmpty(),
-                typeCode = response.tipoEvento.orEmpty().removePrefix("e"),
-                sequence = response.numSeqEvento ?: 1,
-                processedAt = XmlSupport.parseDateTime(response.dataHoraProcessamento),
-                accessKey = accessKey,
-                xml = "",
-            )
-
     private fun decode(
         payload: String?,
         field: String,
     ): String = GzipBase64.decode(payload ?: throw NfseException.Unavailable("Response without $field"))
-
-    /** Runs a call, turning transport failures into [NfseException.Unavailable]; [NfseException]s pass through. */
-    private fun <T> execute(call: () -> T): T =
-        try {
-            call()
-        } catch (e: ResourceAccessException) {
-            throw NfseException.Unavailable("Cannot reach the NFS-e service: ${e.message}", cause = e)
-        } catch (e: RestClientException) {
-            throw (e.cause as? NfseException) ?: NfseException.Unavailable("NFS-e call failed: ${e.message}", cause = e)
-        }
-}
-
-/** Paths under the Sefin Nacional base URL. */
-object NfseApiPaths {
-    const val NFSE = "/nfse"
-    const val NFSE_BY_KEY = "/nfse/{chaveAcesso}"
-    const val DPS_BY_ID = "/dps/{id}"
-    const val EVENTS = "/nfse/{chaveAcesso}/eventos"
-    const val MUNICIPAL_AGREEMENT = "/parametros_municipais/{codigoMunicipio}/convenio"
-    const val MUNICIPAL_SERVICE_PARAMETERS = "/parametros_municipais/{codigoMunicipio}/{codigoServico}"
 }

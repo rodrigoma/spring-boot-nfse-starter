@@ -37,7 +37,7 @@ class DpsXmlBuilderTest {
                 """<DPS versao="1.01" xmlns="http://www.sped.fazenda.gov.br/nfse">""" +
                 """<infDPS Id="DPS355030821234567800019500001000000000000001">""" +
                 "<tpAmb>2</tpAmb><dhEmi>2026-09-19T10:00:00-03:00</dhEmi><verAplic>test/1.0</verAplic>" +
-                "<serie>00001</serie><nDPS>1</nDPS><dCompet>2026-09-19</dCompet><tpEmit>1</tpEmit>" +
+                "<serie>1</serie><nDPS>1</nDPS><dCompet>2026-09-19</dCompet><tpEmit>1</tpEmit>" +
                 "<cLocEmi>3550308</cLocEmi>" +
                 "<prest><CNPJ>12345678000195</CNPJ><IM>12345</IM>" +
                 "<regTrib><opSimpNac>1</opSimpNac><regEspTrib>0</regEspTrib></regTrib></prest>" +

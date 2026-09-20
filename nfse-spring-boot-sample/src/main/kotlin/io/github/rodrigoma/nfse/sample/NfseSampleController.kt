@@ -10,6 +10,8 @@ import io.github.rodrigoma.nfse.model.event.CancellationReason
 import io.github.rodrigoma.nfse.model.event.NfseEvent
 import io.github.rodrigoma.nfse.model.request.DpsRequest
 import io.github.rodrigoma.nfse.model.request.ServiceRequest
+import io.github.rodrigoma.nfse.model.response.DistributionBatch
+import io.github.rodrigoma.nfse.model.response.MunicipalParameters
 import io.github.rodrigoma.nfse.model.response.Nfse
 import io.github.rodrigoma.nfse.model.response.NfseResult
 import org.springframework.http.MediaType
@@ -77,6 +79,17 @@ class NfseSampleController(
     fun events(
         @PathVariable accessKey: String,
     ): List<NfseEvent> = nfseClient.events(accessKey)
+
+    @GetMapping("/distribution/{nsu}")
+    fun distribution(
+        @PathVariable nsu: Long,
+    ): DistributionBatch = nfseClient.distribution(nsu)
+
+    @GetMapping("/parameters/{municipalityIbge}/{serviceCode}")
+    fun rates(
+        @PathVariable municipalityIbge: Int,
+        @PathVariable serviceCode: String,
+    ): MunicipalParameters = nfseClient.municipalParameters.rates(municipalityIbge, serviceCode, LocalDate.now())
 
     @GetMapping("/{accessKey}/danfse", produces = [MediaType.APPLICATION_PDF_VALUE])
     fun danfse(

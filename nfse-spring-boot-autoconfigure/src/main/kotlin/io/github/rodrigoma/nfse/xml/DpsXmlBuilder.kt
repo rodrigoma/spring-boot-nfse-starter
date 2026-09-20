@@ -1,7 +1,6 @@
 package io.github.rodrigoma.nfse.xml
 
 import io.github.rodrigoma.nfse.model.dps.Dps
-import io.github.rodrigoma.nfse.model.dps.DpsId
 import io.github.rodrigoma.nfse.model.dps.Substitution
 import org.w3c.dom.Document
 import org.w3c.dom.Element
@@ -48,7 +47,8 @@ class DpsXmlBuilder(
         infDps.text("tpAmb", dps.environment.code)
         infDps.text("dhEmi", XmlSupport.formatDateTime(dps.issuedAt))
         infDps.text("verAplic", dps.applicationVersion.take(APPLICATION_VERSION_MAX_LENGTH))
-        infDps.text("serie", dps.series.toString().padStart(DpsId.SERIES_LENGTH, '0'))
+        // Unpadded, as the notes generated in production carry it (`<serie>3</serie>`); the Id pads it to 5.
+        infDps.text("serie", dps.series.toString())
         infDps.text("nDPS", dps.number.toString())
         infDps.date("dCompet", dps.competenceDate)
         infDps.code("tpEmit", dps.emitterType)

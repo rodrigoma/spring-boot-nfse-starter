@@ -14,7 +14,6 @@ import tools.jackson.databind.json.JsonMapper
 import java.net.InetSocketAddress
 import java.nio.file.Files
 import java.nio.file.Path
-import java.time.OffsetDateTime
 import java.util.concurrent.Executors
 
 /**
@@ -31,14 +30,9 @@ internal class LocalSefin private constructor(
     private val mapper = JsonMapper.builder().build()
     private val dpsValidator = XsdValidator.dps()
     private val eventValidator = XsdValidator.eventRequest()
+    private val adn = LocalAdn(store)
 
     val baseUrl: String get() = "https://localhost:${server.address.port}"
-
-    private class Reply(
-        val status: Int,
-        val body: ByteArray = ByteArray(0),
-        val contentType: String = "application/json",
-    )
 
     private class Rejection(
         val errors: List<NfseError>,
@@ -50,16 +44,20 @@ internal class LocalSefin private constructor(
         val handler: (List<String>, ByteArray) -> Reply,
     )
 
+    // Same routing as the real services (docs/specs): Sefin at the root, ADN under /contribuintes, /danfse
+    // and /parametrizacao.
     private val routes =
         listOf(
             Route("POST", Regex("/nfse")) { _, body -> emit(body) },
             Route("GET", Regex("/nfse/([^/]+)")) { p, _ -> get(p[0]) },
-            Route("GET", Regex("/dps/([^/]+)")) { p, _ -> dps(p[0], head = false) },
-            Route("HEAD", Regex("/dps/([^/]+)")) { p, _ -> dps(p[0], head = true) },
+            Route("GET", Regex("/dps/(DPS[0-9A-Z]+)")) { p, _ -> dps(p[0], head = false) },
+            Route("HEAD", Regex("/dps/(DPS[0-9A-Z]+)")) { p, _ -> dps(p[0], head = true) },
             Route("POST", Regex("/nfse/([^/]+)/eventos")) { p, body -> event(p[0], body) },
-            Route("GET", Regex("/nfse/([^/]+)/eventos(/.*)?")) { p, _ -> events(p[0]) },
+            Route("GET", Regex("/nfse/([^/]+)/eventos/([0-9]{6})/([0-9]+)")) { p, _ -> eventByType(p[0], p[1], p[2]) },
+            Route("GET", Regex("/contribuintes/NFSe/([^/]+)/Eventos")) { p, _ -> adn.events(p[0]) },
+            Route("GET", Regex("/contribuintes/DFe/([0-9]+)")) { p, _ -> adn.distribution(p[0].toLong()) },
             Route("GET", Regex("/danfse/([^/]+)")) { p, _ -> danfse(p[0]) },
-            Route("GET", Regex("/parametros_municipais/([^/]+)/([^/]+)")) { p, _ -> parameters(p[0], p[1]) },
+            Route("GET", Regex("/parametrizacao/([^/]+)/(.+)")) { p, _ -> adn.parameters(p[0], p[1]) },
         )
 
     private fun route(exchange: HttpExchange): Reply {
@@ -98,15 +96,17 @@ internal class LocalSefin private constructor(
     }
 
     private fun get(accessKey: String): Reply {
-        val note = store.find(accessKey) ?: return Reply(HTTP_NOT_FOUND)
+        val note = store.find(accessKey) ?: return notFound("Chave de acesso não encontrada.")
         return json(HTTP_OK, header() + mapOf("nfseXmlGZipB64" to GzipBase64.encode(note.nfseXml)))
     }
 
     private fun dps(
-        digits: String,
+        id: String,
         head: Boolean,
     ): Reply {
-        val note = store.findByDps(digits) ?: return Reply(HTTP_NOT_FOUND)
+        val note =
+            store.findByDps(id.removePrefix("DPS"))
+                ?: return notFound("Não foi gerada uma NFS-e com o identificador informado")
         return if (head) Reply(HTTP_OK) else json(HTTP_OK, header() + mapOf("chaveAcesso" to note.accessKey))
     }
 
@@ -114,7 +114,7 @@ internal class LocalSefin private constructor(
         accessKey: String,
         body: ByteArray,
     ): Reply {
-        val note = store.find(accessKey) ?: return Reply(HTTP_NOT_FOUND)
+        val note = store.find(accessKey) ?: return notFound("Chave de acesso não encontrada.")
         val request = decode(body, "pedidoRegistroEventoXmlGZipB64", eventValidator)
         if (note.events.any { it.typeCode == CANCELLATION }) {
             reject("E0840", "O evento de Cancelamento de NFS-e já está vinculado à NFS-e indicada.")
@@ -122,31 +122,23 @@ internal class LocalSefin private constructor(
         return json(HTTP_CREATED, header() + eventJson(store.registerEvent(note, request)))
     }
 
-    private fun events(accessKey: String): Reply {
-        val note = store.find(accessKey) ?: return Reply(HTTP_NOT_FOUND)
-        return json(HTTP_OK, header() + mapOf("eventos" to note.events.map { eventJson(it) }))
+    private fun eventByType(
+        accessKey: String,
+        typeCode: String,
+        sequence: String,
+    ): Reply {
+        val note = store.find(accessKey) ?: return notFound("Chave de acesso não encontrada.")
+        val event = note.events.firstOrNull { it.typeCode == typeCode && it.sequence == sequence.toInt() }
+        return event?.let { json(HTTP_OK, header() + eventJson(it)) }
+            ?: notFound("Nenhum evento encontrado para a NFS-e")
     }
 
     private fun danfse(accessKey: String): Reply {
-        val note = store.find(accessKey) ?: return Reply(HTTP_NOT_FOUND)
+        val note = store.find(accessKey) ?: return notFound("Chave de acesso não encontrada.")
         val pdf = LocalPdf.render(listOf("DANFSE (sandbox local)", "Chave de acesso: ${note.accessKey}"))
         return Reply(HTTP_OK, pdf, "application/pdf")
     }
 
-    private fun parameters(
-        municipality: String,
-        service: String,
-    ): Reply {
-        val payload =
-            if (service == "convenio") {
-                mapOf("parametrosConvenio" to mapOf("codigoMunicipio" to municipality, "aderenteAmbienteNacional" to 1))
-            } else {
-                mapOf("parametrosAliquota" to listOf(mapOf("codigoServico" to service, "aliquota" to 2.0)))
-            }
-        return json(HTTP_OK, header() + payload)
-    }
-
-    /** Decodes a `…XmlGZipB64` field, validates the XML against [validator] and verifies its signature. */
     private fun decode(
         body: ByteArray,
         field: String,
@@ -169,11 +161,6 @@ internal class LocalSefin private constructor(
         code: String,
         description: String,
     ): Nothing = throw Rejection(listOf(NfseError(code, description)))
-
-    private fun json(
-        status: Int,
-        value: Any,
-    ): Reply = Reply(status, mapper.writeValueAsBytes(value))
 
     private fun handle(exchange: HttpExchange) {
         val reply =
@@ -200,10 +187,6 @@ internal class LocalSefin private constructor(
     companion object {
         private val log = LoggerFactory.getLogger(LocalSefin::class.java)
         private const val CANCELLATION = "101101"
-        private const val HTTP_OK = 200
-        private const val HTTP_CREATED = 201
-        private const val HTTP_BAD_REQUEST = 400
-        private const val HTTP_NOT_FOUND = 404
 
         /** Boots the sandbox and returns the `nfse.*` properties that point the starter at it. */
         fun start(cnpj: String): Map<String, Any> {
@@ -230,26 +213,15 @@ internal class LocalSefin private constructor(
                 "nfse.certificate.trust-store-path" to trust.toString(),
                 "nfse.certificate.trust-store-password" to LocalCertificates.PASSWORD,
                 "nfse.base-url.sefin" to sefin.baseUrl,
+                "nfse.base-url.adn" to "${sefin.baseUrl}/contribuintes",
                 "nfse.base-url.danfse" to "${sefin.baseUrl}/danfse",
+                "nfse.base-url.municipal-parameters" to "${sefin.baseUrl}/parametrizacao",
             )
         }
     }
 }
 
-private fun eventJson(event: StoredEvent): Map<String, Any?> =
-    mapOf(
-        "idEvento" to event.id,
-        "tipoEvento" to event.typeCode,
-        "numSeqEvento" to event.sequence,
-        "eventoXmlGZipB64" to GzipBase64.encode(event.xml),
-    )
-
-private fun header(): Map<String, Any?> =
-    mapOf(
-        "tipoAmbiente" to 2,
-        "versaoAplicativo" to "LocalSefin/1.0",
-        "dataHoraProcessamento" to OffsetDateTime.now().toString(),
-    )
+private fun eventJson(event: StoredEvent): Map<String, Any?> = mapOf("eventoXmlGZipB64" to GzipBase64.encode(event.xml))
 
 private fun Element.element(name: String): Element =
     getElementsByTagNameNS(XmlSupport.NFSE_NAMESPACE, name).item(0) as Element
