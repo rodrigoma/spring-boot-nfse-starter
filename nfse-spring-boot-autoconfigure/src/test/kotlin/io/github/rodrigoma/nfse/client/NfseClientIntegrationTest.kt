@@ -216,6 +216,12 @@ class NfseClientIntegrationTest {
             val unknown = dpsId.copy(number = 2)
             assertThat(client.accessKeyOf(unknown)).isNull()
             assertThat(client.exists(unknown)).isFalse()
+
+            val unexpected = dpsId.copy(number = 3)
+            stub.stub("GET", "/dps/${unexpected.digits}", 200, """{"tipoAmbiente":2}""")
+            assertThatThrownBy { client.accessKeyOf(unexpected) }
+                .isInstanceOf(NfseException.Unavailable::class.java)
+                .hasMessageContaining("chaveAcesso")
         }
     }
 

@@ -101,7 +101,6 @@ nfse:
 | `nfse.certificate.trust-store-password` | `String` | — | No | Password of that trust store |
 | `nfse.emitter.cnpj` / `nfse.emitter.cpf` | `String` | — | One of | Federal id of the service provider; punctuation is ignored |
 | `nfse.emitter.municipal-registration` | `String` | — | No | `IM` — mandatory when the municipality keeps a complementary registry (rule E0125) |
-| `nfse.emitter.name` | `String` | — | No | Kept for DPS issued by a taker/intermediary; **not sent** when the provider emits (rule E0121) |
 | `nfse.emitter.municipality-ibge` | `Int` | — | Yes | IBGE code of the establishment — `cLocEmi` and default place of provision |
 | `nfse.emitter.address.*` | — | — | No | `street`, `number`, `complement`, `district`, `zip-code`, `municipality-ibge`, `state` |
 | `nfse.emitter.email`, `nfse.emitter.phone` | `String` | — | No | Phone is digits only (DDD + number) |
@@ -184,7 +183,8 @@ class InvoiceService(private val nfse: NfseClient, private val counters: DpsCoun
 ```
 
 `DpsRequest` carries what changes per invoice; the provider group comes from `nfse.emitter.*` (override it per
-call with `provider = ServiceProvider(...)` when one application issues for several CNPJs). Foreign takers use
+call with `provider = ServiceProvider(...)` and `emitterMunicipalityIbge` when one application issues for several
+CNPJs). The provider's name is never written when the provider emits — rule E0121 forbids it. Foreign takers use
 `FederalId.Nif("…")` or `FederalId.NoNif(reason)` and a foreign `Address`. To replace a note, set
 `substitution = Substitution(substitutedAccessKey, SubstitutionReason.OTHER, "justification…")` — the Sefin cancels
 the old note by substitution and returns the new one. The optional IBS/CBS group (tax reform) is available as

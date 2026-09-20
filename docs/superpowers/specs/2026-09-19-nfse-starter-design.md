@@ -106,7 +106,7 @@ interface NfseClient {
 
 `enabled`, `environment` (`RESTRICTED_PRODUCTION` default | `PRODUCTION`), `certificate.pfx-path` /
 `certificate.pfx-base64`, `certificate.password`, `certificate.trust-store-path/-password` (optional),
-`emitter.cnpj` | `emitter.cpf`, `emitter.municipal-registration`, `emitter.name`,
+`emitter.cnpj` | `emitter.cpf`, `emitter.municipal-registration`,
 `emitter.municipality-ibge`, `emitter.address.*`, `emitter.email`, `emitter.phone`,
 `emitter.tax-regime.simples-nacional` (`NOT_OPTING` | `MEI` | `ME_EPP`), `emitter.tax-regime.simples-nacional-assessment`
 (`SIMPLES_NACIONAL` | `FEDERAL_ONLY` | `NONE`), `emitter.tax-regime.special-regime` (`NONE`, `COOPERATIVE`,

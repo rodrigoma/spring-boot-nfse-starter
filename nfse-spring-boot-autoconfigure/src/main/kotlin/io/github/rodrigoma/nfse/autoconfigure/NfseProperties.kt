@@ -54,8 +54,6 @@ data class NfseProperties(
         val cnpj: String? = null,
         val cpf: String? = null,
         val municipalRegistration: String? = null,
-        /** Only written when the provider is **not** the emitter of the DPS (rule E0121). */
-        val name: String? = null,
         /** IBGE code of the municipality of the establishment (`cLocEmi`). */
         val municipalityIbge: Int? = null,
         val address: Address = Address(),

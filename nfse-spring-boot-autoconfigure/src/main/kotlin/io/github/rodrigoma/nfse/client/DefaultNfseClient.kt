@@ -85,13 +85,16 @@ class DefaultNfseClient(
 
     override fun accessKeyOf(dpsId: DpsId): String? =
         try {
-            execute {
-                restClient
-                    .get()
-                    .uri(NfseApiPaths.DPS_BY_ID, dpsId.digits)
-                    .retrieve()
-                    .body<ApiPayloads.DpsResponse>()
-            }?.chaveAcesso
+            val response =
+                execute {
+                    restClient
+                        .get()
+                        .uri(NfseApiPaths.DPS_BY_ID, dpsId.digits)
+                        .retrieve()
+                        .body<ApiPayloads.DpsResponse>()
+                }
+            response?.chaveAcesso
+                ?: throw NfseException.Unavailable("Response of GET ${NfseApiPaths.DPS_BY_ID} without chaveAcesso")
         } catch (_: NfseException.NotFound) {
             null
         }

@@ -61,6 +61,7 @@ class DpsAssemblerTest {
                 series = 5,
                 issuedAt = TestDps.issuedAt,
                 provider = TestDps.provider.copy(id = FederalId.Cnpj("98765432000198")),
+                emitterMunicipalityIbge = 3550308,
                 service =
                     request.service.copy(
                         municipalityIbge = 3304557,
@@ -71,6 +72,8 @@ class DpsAssemblerTest {
         assertThat(dps.series).isEqualTo(5)
         assertThat(dps.issuedAt).isEqualTo(TestDps.issuedAt)
         assertThat(dps.provider.id).isEqualTo(FederalId.Cnpj("98765432000198"))
+        assertThat(dps.emitterMunicipalityIbge).isEqualTo(3550308)
+        assertThat(dps.id.value).startsWith("DPS3550308298765432000198")
         assertThat(dps.service.location).isEqualTo(ServiceLocation.Municipality(3304557))
         assertThat(dps.service.additionalInfo?.purchaseOrder).isEqualTo("PO")
 

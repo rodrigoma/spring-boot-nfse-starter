@@ -23,6 +23,13 @@ class IcpBrasilExtensionsTest {
     }
 
     @Test
+    fun `parseOtherName rejects a truncated OtherName - federalIdOf swallows it`() {
+        val truncated = otherName("2.16.76.1.3.3", "12345678000195".toByteArray()).copyOf(12)
+        assertThat(runCatching { IcpBrasilExtensions.parseOtherName(truncated) }.exceptionOrNull())
+            .isInstanceOf(IndexOutOfBoundsException::class.java)
+    }
+
+    @Test
     fun `returns null for structures that are not OtherName`() {
         val notASequence = DEROctetString(byteArrayOf(1, 2)).encoded
         val noOid = DERSequence(arrayOf(DEROctetString(byteArrayOf(1)))).encoded

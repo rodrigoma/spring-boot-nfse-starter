@@ -17,7 +17,7 @@ class DpsAssembler(
     private val clock: Clock = Clock.systemDefaultZone(),
 ) {
     fun assemble(request: DpsRequest): Dps {
-        val emitterMunicipality = requireNotNull(properties.emitter.municipalityIbge)
+        val emitterMunicipality = request.emitterMunicipalityIbge ?: requireNotNull(properties.emitter.municipalityIbge)
         val service = request.service
         return Dps(
             environment = properties.environment,

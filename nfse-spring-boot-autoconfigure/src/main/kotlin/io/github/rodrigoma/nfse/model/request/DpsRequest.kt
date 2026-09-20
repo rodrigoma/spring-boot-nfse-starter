@@ -48,6 +48,8 @@ data class ServiceRequest(
  * @property issuedAt `dhEmi`; defaults to now.
  * @property taker The service taker; foreign takers use [io.github.rodrigoma.nfse.model.dps.FederalId.Nif].
  * @property substitution When set, this DPS replaces the given NFS-e (the Sefin cancels it by substitution).
+ * @property provider Overrides `nfse.emitter.*` for applications that issue for more than one CNPJ.
+ * @property emitterMunicipalityIbge `cLocEmi` for that provider; defaults to `nfse.emitter.municipality-ibge`.
  */
 data class DpsRequest(
     val number: Long,
@@ -61,4 +63,5 @@ data class DpsRequest(
     val substitution: Substitution? = null,
     val ibsCbs: IbsCbs? = null,
     val provider: ServiceProvider? = null,
+    val emitterMunicipalityIbge: Int? = null,
 )

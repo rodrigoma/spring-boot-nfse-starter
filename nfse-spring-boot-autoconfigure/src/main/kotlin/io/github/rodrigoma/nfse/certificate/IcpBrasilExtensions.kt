@@ -24,15 +24,22 @@ internal object IcpBrasilExtensions {
     private const val CPF_OFFSET = 8
     private const val BYTE_MASK = 0xFF
 
-    /** The CNPJ (preferred) or CPF the certificate identifies, or `null` when neither extension is present. */
+    /**
+     * The CNPJ (preferred) or CPF the certificate identifies, or `null` when neither extension is present or the
+     * extensions cannot be read — a certificate with odd extensions must still be usable.
+     */
     fun federalIdOf(certificate: X509Certificate): FederalId? {
         val otherNames =
-            certificate.subjectAlternativeNames
-                .orEmpty()
+            runCatching { certificate.subjectAlternativeNames.orEmpty() }
+                .getOrDefault(emptyList())
                 .filter { it.size >= 2 && it[0] == OTHER_NAME_TYPE && it[1] is ByteArray }
-                .mapNotNull { parseOtherName(it[1] as ByteArray) }
+                .mapNotNull { runCatching { parseOtherName(it[1] as ByteArray) }.getOrNull() }
                 .toMap()
-        val cnpj = otherNames[CNPJ_OID]?.filter(Char::isDigit)?.takeIf { it.length == FederalId.CNPJ_LENGTH }
+        val cnpj =
+            otherNames[CNPJ_OID]
+                ?.uppercase()
+                ?.filter(Char::isLetterOrDigit)
+                ?.takeIf { it.length == FederalId.CNPJ_LENGTH }
         val cpf =
             otherNames[CPF_OID]
                 ?.filter(Char::isDigit)

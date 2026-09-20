@@ -82,6 +82,12 @@ class NfseCertificateTest {
     }
 
     @Test
+    fun `reads an alphanumeric CNPJ from the extension`() {
+        val certificate = load(TestCertificates.emitter(cnpj = "12ABC34501DE35"))
+        assertThat(certificate.federalId).isEqualTo(FederalId.Cnpj("12ABC34501DE35"))
+    }
+
+    @Test
     fun `reads the CPF from the e-CPF extension`() {
         val certificate = load(TestCertificates.emitter(cnpj = null, cpf = true))
         assertThat(certificate.federalId).isEqualTo(FederalId.Cpf("12345678909"))
