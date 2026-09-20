@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL
 import com.fasterxml.jackson.annotation.JsonInclude.Value.construct
 import io.github.rodrigoma.nfse.certificate.NfseCertificate
 import io.github.rodrigoma.nfse.certificate.NfseSslContextFactory
+import io.github.rodrigoma.nfse.client.DanfsePdfRenderer
 import io.github.rodrigoma.nfse.client.DefaultNfseClient
 import io.github.rodrigoma.nfse.client.NfseClient
 import io.github.rodrigoma.nfse.http.NfseErrorHandler
@@ -95,7 +96,8 @@ class NfseAutoConfiguration(
     fun nfseClient(
         @Qualifier("nfseRestClient") restClient: RestClient,
         certificate: NfseCertificate,
-    ): NfseClient = DefaultNfseClient(restClient, properties, certificate)
+        danfseRenderer: ObjectProvider<DanfsePdfRenderer>,
+    ): NfseClient = DefaultNfseClient(restClient, properties, certificate, danfseRenderer = danfseRenderer.ifAvailable)
 
     private fun sameHolder(
         configured: FederalId,

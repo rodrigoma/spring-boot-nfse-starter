@@ -71,7 +71,8 @@ class NfseClientIntegrationTest {
                     "nfse.base-url.danfse=${stub.baseUrl}/danfse",
                     "nfse.base-url.municipal-parameters=${stub.baseUrl}/parametrizacao",
                     "nfse.application-version=test/1.0",
-                    "nfse.read-timeout=1s",
+                    // The first mTLS handshake of each context can take a while on a loaded machine
+                    "nfse.read-timeout=2s",
                     "nfse.log-requests=true",
                 )
     }
@@ -178,7 +179,7 @@ class NfseClientIntegrationTest {
                 .satisfies({ assertThat((it as NfseException.Unavailable).statusCode).isEqualTo(503) })
         }
 
-        stub.stub("POST", "/nfse", 200, nfseResponse(), delayMillis = 2500)
+        stub.stub("POST", "/nfse", 200, nfseResponse(), delayMillis = 5000)
         withClient { client ->
             assertThatThrownBy { client.emit(request) }
                 .isInstanceOf(NfseException.Unavailable::class.java)

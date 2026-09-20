@@ -1,6 +1,6 @@
 # DANFSe renderer — mapping of NT 008/2026 and effort estimate
 
-Status: **step zero (analysis only), nothing implemented.** Source: NT 008 v1.02 of 2026-07-14
+Status: **implemented** as `nfse-spring-boot-danfse` (see "As built" at the end). Source: NT 008 v1.02 of 2026-07-14
 ([`docs/nt-008-danfse-v1-02.pdf`](../../nt-008-danfse-v1-02.pdf)), model in
 [`docs/danfse-v2-model.png`](../../danfse-v2-model.png).
 
@@ -77,3 +77,21 @@ out of scope until published).
 
 Build it after the first real emission with the certificate (the XML samples from restricted production are the
 best fixtures for the parser and for the golden images). Start with the parser, which is useful on its own.
+
+## As built
+
+The module follows the proposed shape with these deviations from the table above:
+
+- **No full `Dps` parser.** The renderer reads the `NFSe` XML through a DOM view (`layout/NfseView`) that walks
+  the paths of table 2.4.5 by local name and formats each value; it does not build the `Dps` object model back.
+  Cheaper, and the DANFSe needs the text of the fields, not the types.
+- **Fonts: Helvetica** (PDF standard 14, metric-compatible with Arial) instead of an embedded Liberation Sans —
+  nothing to ship, the PDF stays ~95 KB. Text is sanitised to WinAnsi (characters outside it print as `?`).
+- **`DanfseOptions(stub)`** only; the emitter logo option was dropped (the NT fixes the gov.br logo).
+- **Watermark** drawn under the content (first), 60 pt Helvetica-Bold, grey 0.65, 45°.
+- **Verification**: text-extraction tests with PDFBox (`DanfseRendererTest`) plus a visual check of
+  `./gradlew :nfse-spring-boot-danfse:renderSamples` against the model of Anexo I. There is no golden-image test
+  and no comparison with a government-generated PDF (none is available since the suspension).
+- **Federal block** printed for competences ≤ 2026 (NT note 6); the "Totais Aproximados dos Tributos" line is
+  always kept when "Informações Complementares" overflows — the notes are truncated instead.
+

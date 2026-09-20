@@ -8,6 +8,11 @@ All notable changes to this project are documented here. The format follows
 Initial release candidate.
 
 ### Added
+- `nfse-spring-boot-danfse`, an optional module that renders the DANFSe v2.0 (NT 008/2026) locally from the
+  `NFSe` XML with Apache PDFBox and ZXing: one A4 page after the model of Anexo I, QR Code of the public query,
+  restricted-production warning, CANCELADA / SUBSTITUÍDA watermark from the events, optional "Canhoto"
+  (`nfse.danfse.stub`). With the module on the classpath `NfseClient.danfse()` renders instead of calling the
+  suspended ADN service (`nfse.danfse.enabled=false` restores the call); `DanfsePdfRenderer` is the hook.
 - Contract aligned with the OpenAPI specs of the four services (`docs/specs/`): `GET/HEAD /dps/{id}` with the full
   id, single-`erro` error bodies, `alertas[]` on emission (`NfseResult.alerts`), `event(accessKey, type, sequence)`,
   the event list and the distribution by NSU through the ADN (`events`, `distribution`), municipal parameters

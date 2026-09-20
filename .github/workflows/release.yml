@@ -39,6 +39,7 @@ jobs:
           ./gradlew
           :nfse-spring-boot-autoconfigure:publishMavenJavaPublicationToLocalRepository
           :nfse-spring-boot-starter:publishMavenJavaPublicationToLocalRepository
+          :nfse-spring-boot-danfse:publishMavenJavaPublicationToLocalRepository
         env:
           ORG_GRADLE_PROJECT_signingKey: ${{ secrets.SIGNING_KEY }}
           ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.SIGNING_PASSWORD }}

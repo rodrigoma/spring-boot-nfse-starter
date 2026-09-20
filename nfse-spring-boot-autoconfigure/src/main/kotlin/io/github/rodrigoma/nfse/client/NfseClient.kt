@@ -70,8 +70,9 @@ interface NfseClient {
     ): DistributionBatch
 
     /**
-     * The DANFSE (PDF) from the ADN. **NT 008/2026 suspended the official generation on 2026-08-03** — expect
-     * `NotFound`/`Unavailable` until the service is restored; emitters are expected to render the PDF themselves.
+     * The DANFSe (PDF). With the `nfse-spring-boot-danfse` module on the classpath the PDF is rendered locally from
+     * the note and its events (NT 008/2026 layout); otherwise it is fetched from the ADN — whose official
+     * generation **is suspended since 2026-08-03**, so expect `NotFound`/`Unavailable` there.
      */
     fun danfse(accessKey: String): ByteArray
 
