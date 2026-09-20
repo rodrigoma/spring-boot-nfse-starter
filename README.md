@@ -338,14 +338,15 @@ paths and schema fields to compare with the list below.
   describes the parameter.
 - **Signature algorithm.** Anexo I names none; the library signs with RSA-SHA256 / SHA-256, inclusive C14N and the
   enveloped transform, in the default xmldsig namespace (namespace prefixes are rejected by rule E1228).
-- **`TSSerieDPS`.** The official XSD declares the pattern `^0{0,4}\d{1,5}$`. In XML Schema regular expressions
-  `^` and `$` are ordinary characters, so a conforming validator rejects every series. The embedded copy uses the
-  intended pattern `0{0,4}\d{1,5}`; the series is written zero-padded to five digits (`00001`).
+- **Schemas.** The embedded XSDs are the `NFSe-ESQUEMAS_XSD v1.01` package published on the restricted-production
+  page on 2026-07-27, verbatim. Compared with the 2026-02-09 package of the production page it fixes
+  `TSSerieDPS` (whose `^…$` anchors, literal characters in XML Schema regular expressions, rejected every series),
+  drops the `DOCTYPE` of `xmldsig-core-schema.xsd` (no network access during validation) and introduces the
+  **alphanumeric CNPJ** (`[0-9A-Z]{14}`) in the CNPJ, DPS id and access key patterns — `FederalId.Cnpj` accepts it.
+  The series is written zero-padded to five digits (`00001`).
 - **`TSIdPedRegEvt`.** Anexo II describes the request id as `PRE` + access key + event type + request number, but
-  the XSD pattern is `PRE[0-9]{56}` (key 50 + type 6) with `maxLength` 59 = 3 + 56. The library follows the schema:
+  the XSD pattern is `PRE` + 56 characters (key 50 + type 6) with `maxLength` 59. The library follows the schema:
   no request number.
-- **`xmldsig-core-schema.xsd`** ships with a `DOCTYPE` pointing at w3.org; the embedded copy has it removed so
-  validation never touches the network. Every other schema is embedded verbatim.
 - **Municipal parameters** are returned as the raw JSON object (`MunicipalParameters.raw`); the manual does not
   publish their layout.
 - **DANFSE** is fetched from `{danfse base URL}/{chaveAcesso}` with `Accept: application/pdf`.

@@ -33,17 +33,17 @@ question. Rodrigo authorized these decisions to be taken autonomously.
   2 Serviço não prestado, 9 Outros}, `xMotivo` 15–255 chars (mandatory). Pedido id = `"PRE"` + access
   key(50) + event type(6) — the prose of Anexo II adds `nPedRegEvento`(3), but the XSD pattern `PRE[0-9]{56}`
   and `maxLength` 59 do not; the schema wins. Signed with the emitter's certificate (E1991).
-- `TSSerieDPS` v1.01 declares `^0{0,4}\d{1,5}$`; `^`/`$` are literals in XSD regex, so the embedded copy uses
-  `0{0,4}\d{1,5}` (see README → Notes on the official docs).
+- `TSSerieDPS` of the 2026-02-09 package declares `^0{0,4}\d{1,5}$` (`^`/`$` are literals in XSD regex). The
+  2026-07-27 package from the restricted-production page fixes it and adds the alphanumeric CNPJ; that is the one
+  embedded, verbatim.
 - Certificate rules (Anexo I): X.509 v3, not a CA, KeyUsage `digitalSignature` + `nonRepudiation`
   (signature) and `clientAuth` EKU (transport), ICP-Brasil chain, CNPJ/CPF in `otherName` OID
   `2.16.76.1.3.3` / `2.16.76.1.3.1`.
 - Signature algorithm is **not** stated in Anexo I or the XSDs (`xmldsig-core-schema` is generic). Default
   RSA-SHA256 + SHA-256 digests + inclusive C14N + enveloped transform, matching the reference
   implementations of the national emitter; `nfse.signature.algorithm=RSA_SHA1` is available as a fallback.
-- `xmldsig-core-schema.xsd` ships with a `DOCTYPE` pointing at `http://www.w3.org/2001/XMLSchema.dtd`.
-  The embedded copy has that `DOCTYPE` removed (the entities it declares are not used) so validation never
-  touches the network. All other XSDs are embedded verbatim under `META-INF/nfse/xsd/1.01/`.
+- `xmldsig-core-schema.xsd` of the 2026-02-09 package ships with a `DOCTYPE` pointing at w3.org; the 2026-07-27
+  package removes it. All XSDs are embedded verbatim under `META-INF/nfse/xsd/1.01/`.
 
 ## Structure
 

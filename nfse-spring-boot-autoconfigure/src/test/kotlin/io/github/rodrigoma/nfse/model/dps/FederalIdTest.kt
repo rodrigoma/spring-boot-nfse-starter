@@ -14,6 +14,13 @@ class FederalIdTest {
     }
 
     @Test
+    fun `accepts the alphanumeric CNPJ and normalises case`() {
+        assertThat(FederalId.Cnpj("12.abc.345/01de-35").value).isEqualTo("12ABC34501DE35")
+        assertThat(FederalId.cnpjOrCpf("12ABC34501DE35")).isEqualTo(FederalId.Cnpj("12abc34501de35"))
+        assertThatThrownBy { FederalId.Cnpj("12ABC34501DE3ç") }.hasMessageContaining("CNPJ")
+    }
+
+    @Test
     fun `cnpjOrCpf picks by digit count`() {
         assertThat(FederalId.cnpjOrCpf("12345678000195")).isInstanceOf(FederalId.Cnpj::class.java)
         assertThat(FederalId.cnpjOrCpf("12345678909")).isInstanceOf(FederalId.Cpf::class.java)

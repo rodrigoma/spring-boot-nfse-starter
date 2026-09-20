@@ -5,12 +5,13 @@ import io.github.rodrigoma.nfse.model.dps.FederalId
 import io.github.rodrigoma.nfse.model.event.CancellationReason
 import io.github.rodrigoma.nfse.support.TestCertificates
 import io.github.rodrigoma.nfse.support.TestDps
+import io.github.rodrigoma.nfse.support.TestXml
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
 
 class EventXmlBuilderTest {
-    private val accessKey = "35503082" + "0".repeat(42)
+    private val accessKey = TestXml.ACCESS_KEY
 
     private fun request(author: FederalId = FederalId.Cnpj(TestDps.CNPJ)) =
         CancellationRequest(

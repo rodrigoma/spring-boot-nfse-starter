@@ -21,8 +21,8 @@ data class CancellationRequest(
 ) {
     init {
         require(author is FederalId.Cnpj || author is FederalId.Cpf) { "The event author must be a CNPJ or a CPF" }
-        require(accessKey.length == ACCESS_KEY_LENGTH && accessKey.all(Char::isDigit)) {
-            "The NFS-e access key must have $ACCESS_KEY_LENGTH digits"
+        require(accessKey.length == ACCESS_KEY_LENGTH && accessKey.all { it in '0'..'9' || it in 'A'..'Z' }) {
+            "The NFS-e access key must have $ACCESS_KEY_LENGTH characters"
         }
         require(justification.length in JUSTIFICATION_MIN_LENGTH..JUSTIFICATION_MAX_LENGTH) {
             "The justification must have between $JUSTIFICATION_MIN_LENGTH and $JUSTIFICATION_MAX_LENGTH characters"

@@ -2,17 +2,23 @@ package io.github.rodrigoma.nfse.model.dps
 
 /**
  * Identification of a party (`CNPJ` | `CPF` | `NIF` | `cNaoNIF` choice in the XSD).
- * Digits only for [Cnpj] and [Cpf]; the constructors strip punctuation so `12.345.678/0001-90` is accepted.
+ * The constructors strip punctuation, so `12.345.678/0001-90` is accepted. [Cnpj] also takes the alphanumeric
+ * CNPJ format (`[0-9A-Z]{14}`, XSD of 2026-07-27); [Cpf] is digits only.
  */
 sealed interface FederalId {
-    /** Fourteen digits. Equality is by [value], so `Cnpj("12.345.678/0001-95") == Cnpj("12345678000195")`. */
+    /**
+     * Fourteen characters, digits or uppercase letters (the alphanumeric CNPJ). Equality is by [value], so
+     * `Cnpj("12.345.678/0001-95") == Cnpj("12345678000195")`.
+     */
     class Cnpj(
         raw: String,
     ) : FederalId {
-        val value: String = raw.filter(Char::isDigit)
+        val value: String = raw.uppercase().filter(Char::isLetterOrDigit)
 
         init {
-            require(value.length == CNPJ_LENGTH) { "CNPJ must have $CNPJ_LENGTH digits, got '$raw'" }
+            require(value.length == CNPJ_LENGTH && value.all { it in '0'..'9' || it in 'A'..'Z' }) {
+                "CNPJ must have $CNPJ_LENGTH digits or uppercase letters, got '$raw'"
+            }
         }
 
         /** The first eight digits — what the Sefin compares with the certificate. */
@@ -62,13 +68,15 @@ sealed interface FederalId {
         const val CPF_LENGTH = 11
         const val NIF_MAX_LENGTH = 40
 
-        /** Builds a [Cnpj] or a [Cpf] from the digit count. */
+        /** Builds a [Cnpj] or a [Cpf] from the character count. */
         fun cnpjOrCpf(document: String): FederalId {
-            val digits = document.filter(Char::isDigit)
-            return when (digits.length) {
-                CNPJ_LENGTH -> Cnpj(digits)
-                CPF_LENGTH -> Cpf(digits)
-                else -> throw IllegalArgumentException("Expected a CNPJ (14 digits) or a CPF (11 digits): '$document'")
+            val characters = document.uppercase().filter(Char::isLetterOrDigit)
+            return when (characters.length) {
+                CNPJ_LENGTH -> Cnpj(characters)
+                CPF_LENGTH -> Cpf(characters)
+                else -> throw IllegalArgumentException(
+                    "Expected a CNPJ (14 characters) or a CPF (11 digits): '$document'",
+                )
             }
         }
     }

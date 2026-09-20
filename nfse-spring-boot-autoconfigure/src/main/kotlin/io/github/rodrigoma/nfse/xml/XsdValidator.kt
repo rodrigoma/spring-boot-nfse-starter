@@ -11,9 +11,9 @@ import javax.xml.validation.Schema
 import javax.xml.validation.SchemaFactory
 
 /**
- * Validates documents against the XSDs embedded in the jar (`META-INF/nfse/xsd/1.01/`). The schemas are the
- * official `NFSe-ESQUEMAS_XSD v1.01` files; only `xmldsig-core-schema.xsd` was altered (its `DOCTYPE` was removed so
- * validation never reaches the network).
+ * Validates documents against the XSDs embedded verbatim in the jar (`META-INF/nfse/xsd/1.01/`): the official
+ * `NFSe-ESQUEMAS_XSD v1.01` package of 2026-07-27 (alphanumeric CNPJ, corrected `TSSerieDPS`, no `DOCTYPE` in
+ * `xmldsig-core-schema.xsd`).
  */
 class XsdValidator(
     resource: String,
