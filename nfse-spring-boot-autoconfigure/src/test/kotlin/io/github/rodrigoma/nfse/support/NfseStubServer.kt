@@ -26,6 +26,7 @@ class NfseStubServer(
         val body: ByteArray,
         val contentType: String = "application/json",
         val delayMillis: Long = 0,
+        val headers: Map<String, String> = emptyMap(),
     )
 
     data class RecordedRequest(
@@ -76,14 +77,16 @@ class NfseStubServer(
         server.start()
     }
 
+    @Suppress("LongParameterList")
     fun stub(
         method: String,
         path: String,
         status: Int = 200,
         body: String = "",
         delayMillis: Long = 0,
+        headers: Map<String, String> = emptyMap(),
     ) {
-        stubs["$method $path"] = Stub(status, body.toByteArray(), "application/json", delayMillis)
+        stubs["$method $path"] = Stub(status, body.toByteArray(), "application/json", delayMillis, headers)
     }
 
     fun stubBytes(
@@ -114,6 +117,7 @@ class NfseStubServer(
         }
         if (stub.delayMillis > 0) Thread.sleep(stub.delayMillis)
         exchange.responseHeaders.add("Content-Type", stub.contentType)
+        stub.headers.forEach { (name, value) -> exchange.responseHeaders.add(name, value) }
         if (exchange.requestMethod == "HEAD" || stub.body.isEmpty()) {
             exchange.sendResponseHeaders(stub.status, -1)
         } else {

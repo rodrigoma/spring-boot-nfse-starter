@@ -8,7 +8,7 @@ A Spring Boot auto-configuration library for the **Sistema Nacional NFS-e** — 
 the electronic service invoice (NFS-e, [gov.br/nfse](https://www.gov.br/nfse)). Configure the emitter's certificate
 and identification, and get an `NfseClient` that builds the DPS, validates it against the official XSD, signs it,
 sends it to the Sefin Nacional over mutual TLS and returns the generated NFS-e — plus lookup, cancellation, events,
-municipal parameters and the DANFSE (PDF).
+distribution by NSU (ADN), municipal parameters and the DANFSE (PDF).
 
 The library knows the **fields** of the national layout (`DPS` v1.01, `pedRegEvento` v1.01), never the values of a
 company: certificate, CNPJ, municipal registration, municipality, tax regime, series, service codes and rates all
@@ -114,27 +114,35 @@ nfse:
 | `nfse.connect-timeout` | `Duration` | `10s` | No | TCP/TLS connect timeout |
 | `nfse.read-timeout` | `Duration` | `60s` | No | Response timeout — emission is synchronous and can take a while |
 | `nfse.base-url.sefin` | `String` | by environment | No | Overrides the Sefin Nacional base URL (e.g. a local stub) |
-| `nfse.base-url.danfse` | `String` | by environment | No | Overrides the DANFSE base URL |
+| `nfse.base-url.adn` | `String` | by environment | No | Overrides the ADN Contribuintes base URL (distribution, event list) |
+| `nfse.base-url.danfse` | `String` | by environment | No | Overrides the ADN DANFSe base URL |
+| `nfse.base-url.municipal-parameters` | `String` | by environment | No | Overrides the ADN Parâmetros Municipais base URL |
 
 The context **fails to start** when a required property is missing, when the certificate cannot be opened (wrong
 password, corrupt file), is expired, is a CA certificate or lacks the *Digital Signature* / *Non Repudiation* key
 usages required by Anexo I. A certificate whose CNPJ base differs from `nfse.emitter.cnpj` logs a warning — the Sefin
 rejects such a DPS with E0718.
 
-### Environments
+### Environments and services
 
-| Value | `tpAmb` | Sefin Nacional | DANFSE |
+The API is split across **two hosts with different wire formats** — the Sefin Nacional (camelCase JSON, integer
+`tipoAmbiente`) and the ADN (PascalCase JSON, string `TipoAmbiente`); the client hides the difference.
+
+| Service | What | Restricted production (`tpAmb=2`, default) | Production (`tpAmb=1`) |
 |---|---|---|---|
-| `RESTRICTED_PRODUCTION` (default) | `2` | `https://sefin.producaorestrita.nfse.gov.br/SefinNacional` | `https://adn.producaorestrita.nfse.gov.br/danfse` |
-| `PRODUCTION` | `1` | `https://sefin.nfse.gov.br/SefinNacional` | `https://adn.nfse.gov.br/danfse` |
+| Sefin Nacional | `POST /nfse`, `GET /nfse/{chave}`, `GET/HEAD /dps/{id}`, `POST /nfse/{chave}/eventos`, `GET /nfse/{chave}/eventos/{tipo}/{seq}` | `https://sefin.producaorestrita.nfse.gov.br/SefinNacional` | `https://sefin.nfse.gov.br/SefinNacional` |
+| ADN Contribuintes | `GET /DFe/{NSU}`, `GET /NFSe/{chave}/Eventos` | `https://adn.producaorestrita.nfse.gov.br/contribuintes` | `https://adn.nfse.gov.br/contribuintes` |
+| ADN DANFSe | `GET /{chave}` (PDF) | `https://adn.producaorestrita.nfse.gov.br/danfse` | `https://adn.nfse.gov.br/danfse` |
+| ADN Parâmetros Municipais | agreement, rates, benefits, special regimes, withholdings | `https://adn.producaorestrita.nfse.gov.br/parametrizacao` | `https://adn.nfse.gov.br/parametrizacao` |
 
-Production is only reached with `PRODUCTION` spelled out (or an explicit `base-url`).
+Production is only reached with `PRODUCTION` spelled out (or explicit `base-url`s). The client always speaks
+**HTTP/1.1** — the Sefin refuses HTTP/2 on authenticated paths.
 
 ## Auto-configured beans
 
 | Bean name | Type | Purpose |
 |---|---|---|
-| `nfseClient` | `NfseClient` | The API you call |
+| `nfseClient` | `NfseClient` | The API you call; `nfseClient.municipalParameters` is the `MunicipalParametersClient` |
 | `nfseCertificate` | `NfseCertificate` | The loaded certificate: private key, chain, CNPJ/CPF read from the ICP-Brasil extension |
 | `nfseRestClient` | `RestClient` | Sefin Nacional client with the mTLS request factory, JSON mapper and error handling |
 | `nfseHealthIndicator` | `HealthIndicator` | Only with `nfse.health-indicator-enabled=true` and Actuator on the classpath |
@@ -202,27 +210,54 @@ event.type            // NfseEventType.CANCELLATION
 event.xml             // the `evento` XML returned by the Sefin
 
 val note = nfse.get(accessKey)                       // Nfse: number, status, amounts, full XML
-val events = nfse.events(accessKey)                  // List<NfseEvent>
-val pdf: ByteArray = nfse.danfse(accessKey)          // DANFSE
+val events = nfse.events(accessKey)                  // ADN: every event of the note (empty when none)
+val cancellation = nfse.event(accessKey, NfseEventType.CANCELLATION)   // Sefin: one event by type + sequence
+val pdf: ByteArray = nfse.danfse(accessKey)          // DANFSE — see the NT 008 note below
 
 // Reconciling after a lost response: the access key from the DPS identifier
 val dpsId = DpsId(municipalityIbge = 3550308, emitter = FederalId.Cnpj("12345678000195"), series = 1, number = 42)
 nfse.exists(dpsId)                                   // HEAD /dps/{id}
 nfse.accessKeyOf(dpsId)                              // GET /dps/{id}, null when no NFS-e was generated
 
-nfse.municipalAgreement(3550308)                     // GET /parametros_municipais/{mun}/convenio
-nfse.municipalParameters(3550308, "010701")          // GET /parametros_municipais/{mun}/{servico}
+// Municipal parameters (ADN Parâmetros Municipais)
+val params = nfse.municipalParameters
+params.agreement(3550308)                            // /{mun}/convenio
+params.rates(3550308, "010701", LocalDate.now())     // /{mun}/{servico}/{competencia}/aliquota
+params.rateHistory(3550308, "010701")
+params.benefit(3550308, "12345678901234", LocalDate.now())
+params.specialRegimes(3550308, "010701", LocalDate.now())
+params.withholdings(3550308, LocalDate.now())        // each returns MunicipalParameters(message, raw)
 ```
+
+### Distribution by NSU (what was issued to or by you)
+
+The ADN hands every document in which the certificate holder is provider, taker or intermediary — NFS-e issued
+by others against your CNPJ, cancellations, manifestations — as a cursor of NSUs:
+
+```kotlin
+var nsu = repository.lastNsu()                       // persisted by the application
+do {
+    val batch = nfse.distribution(nsu)               // GET /DFe/{nsu}?lote=true
+    batch.documents.forEach { document ->            // type NFSE / EVENT / …, xml, accessKey
+        process(document)
+    }
+    nsu = batch.nextNsu
+    repository.saveLastNsu(nsu)
+} while (batch.status == DistributionStatus.FOUND)
+```
+
+`DistributionStatus.NONE_FOUND` (an HTTP 404 with a body on the wire) is the end of the cursor, not an error;
+`REJECTED` surfaces as `NfseException.Rejected`.
 
 ### Error handling
 
 | Exception | When | Notes |
 |---|---|---|
-| `NfseException.Validation` | the DPS/event does not pass the embedded XSD | Nothing is sent; `errors` lists the violations |
+| `NfseException.Validation` | the DPS/event fails the local checks (XSD, CPF/CNPJ check digits) | Nothing is sent; `errors` lists the violations with the official codes (`E1235`, `E0080`…) |
 | `NfseException.Rejected` | HTTP 400/422 from the Sefin | `errors` carries `code`, `description`, `detail` (`E0010`, …); `httpStatus` |
 | `NfseException.Unauthorized` | HTTP 401/403 | The certificate was not accepted for this call |
 | `NfseException.NotFound` | HTTP 404 | NFS-e, DPS or event not found (or not visible to this certificate) |
-| `NfseException.Unavailable` | network error, timeout, HTTP 429/5xx | Retry later; `statusCode` when there was a response |
+| `NfseException.Unavailable` | network error, timeout, HTTP 429/5xx | Retry later; `statusCode` when there was a response, `retryAfter` from a 429 |
 | `NfseException.Certificate` | at startup | Certificate cannot be loaded or violates the ICP-Brasil rules |
 
 ```kotlin
@@ -343,26 +378,36 @@ success, `OUT_OF_SERVICE` when the certificate is refused, `DOWN` otherwise.
 - **Fiscal decisions.** Service codes, rates, withholding, Simples Nacional options, benefits and deductions are
   inputs. Anexo I of the official manual says when each field is mandatory or forbidden for your regime; the Sefin
   validates them and the rejection codes come back verbatim in `NfseException.Rejected`.
-- **Municipal-layout NFS-e** (`tpEmis=2`), emission by administrative/judicial decision (`/decisao-judicial/nfse`)
-  and ADN distribution by NSU (`/DFe/{nsu}`).
+- **Municipal-layout NFS-e** (`tpEmis=2`) and emission by administrative/judicial decision (`/decisao-judicial/nfse`).
+- **DPS issued by the taker or intermediary** (`tpEmit=2/3`): the model allows it, but the current version of the
+  Sefin rejects it (rule E9996).
+- **Rendering the DANFSE locally.** NT 008/2026 suspended the official PDF service on 2026-08-03 and defines a
+  single national layout (DANFSe v2.0) that emitters must render themselves; `danfse()` stays for when the service
+  is back. A local renderer is on the roadmap.
 - **A3 certificates** and HSMs.
 
 ## Notes on the official docs
 
-Decisions taken where the documentation (Emissor Público API manual v1.2, Anexo I/II v1.01, XSD v1.01 of
-2026-02-09) is silent or inconsistent. The Swagger of the restricted-production environment is only reachable with a
-certificate; `scripts/fetch-swagger.sh /path/to/certificado.pfx` downloads the specs with yours and prints the
-paths and schema fields to compare with the list below.
+The HTTP contract follows the OpenAPI documents of the four services captured from the restricted-production
+Swagger UIs (2026-04-16), kept under [`docs/specs/`](docs/specs/README.md) — they settle what the manuals leave
+open. `scripts/fetch-swagger.sh /path/to/certificado.pfx` refreshes them with your certificate. Points worth knowing:
 
-- **JSON field names.** `dpsXmlGZipB64` (request), `nfseXmlGZipB64`, `chaveAcesso`, `idDps`,
-  `dataHoraProcessamento` (responses), `pedidoRegistroEventoXmlGZipB64` / `eventoXmlGZipB64` (events) and
-  `erros[].codigo/descricao/complemento` (rejections). Property names are matched case-insensitively and unknown
-  ones are ignored, so small variations still bind; a rejection body that does not parse becomes a single error
-  with the raw text.
-- **`GET/HEAD /dps/{id}`** receives the 42 digits of the identifier (without the `DPS` literal), as the manual
-  describes the parameter.
+- **JSON shapes.** `POST /nfse` → `NFSePostResponseSucesso` (`idDps`, `chaveAcesso`, `nfseXmlGZipB64`, `alertas[]`)
+  or 400 `NFSePostResponseErro` (`erros[]` of `codigo`/`descricao`/`complemento`). Every other Sefin endpoint
+  answers errors as `ResponseErro` with a **single `erro` object**. The ADN speaks PascalCase and returns **400
+  (rejection) and 404 (nothing found) with a full body** — the client reads `StatusProcessamento` instead of
+  failing. Property names are matched case-insensitively and unknown ones are ignored.
+- **`GET/HEAD /dps/{id}`** receives the full identifier, `DPS` literal included.
+- **Only `GET /nfse/{chave}/eventos/{tipo}/{seq}` exists on the Sefin.** The one- and two-parameter forms of the
+  manual are not in the OpenAPI; the list of events comes from the ADN (`GET /NFSe/{chave}/Eventos`).
+- **Municipal parameters and the DANFSE moved to the ADN** — the Sefin paths answer 501.
+- **HTTP/1.1 only.** The Sefin answers `HTTP_1_1_REQUIRED` on HTTP/2 streams.
 - **Signature algorithm.** Anexo I names none; the library signs with RSA-SHA256 / SHA-256, inclusive C14N and the
-  enveloped transform, in the default xmldsig namespace (namespace prefixes are rejected by rule E1228).
+  enveloped transform, in the default xmldsig namespace (namespace prefixes are rejected by rule E1228). Notes
+  generated in production carry inclusive-C14N signatures; other emitters use exclusive C14N + SHA-256 — the Sefin
+  accepts both.
+- **Series.** Written unpadded (`<serie>3</serie>`), as production notes carry it; the DPS id pads it to five
+  digits.
 - **Schemas.** The embedded XSDs are the `NFSe-ESQUEMAS_XSD v1.01` package published on the restricted-production
   page on 2026-07-27, verbatim. Compared with the 2026-02-09 package of the production page it fixes
   `TSSerieDPS` (whose `^…$` anchors, literal characters in XML Schema regular expressions, rejected every series),
@@ -372,9 +417,23 @@ paths and schema fields to compare with the list below.
 - **`TSIdPedRegEvt`.** Anexo II describes the request id as `PRE` + access key + event type + request number, but
   the XSD pattern is `PRE` + 56 characters (key 50 + type 6) with `maxLength` 59. The library follows the schema:
   no request number.
-- **Municipal parameters** are returned as the raw JSON object (`MunicipalParameters.raw`); the manual does not
-  publish their layout.
-- **DANFSE** is fetched from `{danfse base URL}/{chaveAcesso}` with `Accept: application/pdf`.
+- **Municipal parameters** are returned as `MunicipalParameters(message, raw)`; the payload sits under its own key
+  (`parametrosConvenio`, `aliquotas`, `beneficio`, `regimesEspeciais`, `retencoes`) as the OpenAPI describes it.
+- **DANFSE** is fetched from `{danfse base URL}/{chaveAcesso}` with `Accept: application/pdf` — suspended by
+  NT 008/2026, see above.
+
+### Standards radar
+
+What the standard is doing around this release — details and check history in
+[`docs/standards-watch.md`](docs/standards-watch.md):
+
+- **CNPJ alfanumérico** in production since 2026-08-10 (XSD bundle 2026-07-27, embedded here).
+- **IBS/CBS** (`IBSCBS` group): omission is tolerated until 2026-12-31; highlighting becomes mandatory in waves
+  from **2026-10-01** (LC 116 services in general). Model it with `DpsRequest.ibsCbs`.
+- **Simples Nacional** emitters must use the national emitter from **2026-11-01** (Resolução CGSN 191).
+- **NT 008/2026**: official DANFSE generation suspended on 2026-08-03; single national PDF layout to be rendered
+  by emitters.
+- **NT 009/2026** (new layout, IBS/CBS adjustments, `finNFSe` credit/debit notes): published, without a schedule.
 
 ## Releasing (maintainers)
 

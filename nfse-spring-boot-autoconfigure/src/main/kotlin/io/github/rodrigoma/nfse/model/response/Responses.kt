@@ -1,6 +1,8 @@
 package io.github.rodrigoma.nfse.model.response
 
+import io.github.rodrigoma.nfse.exception.NfseError
 import java.math.BigDecimal
+import java.time.LocalDate
 import java.time.OffsetDateTime
 
 /**
@@ -27,7 +29,11 @@ data class Nfse(
     val xml: String,
 )
 
-/** Result of `POST /nfse`. */
+/**
+ * Result of `POST /nfse`.
+ *
+ * @property alerts `alertas[]` — warnings the Sefin attached to a note it still generated.
+ */
 data class NfseResult(
     val accessKey: String,
     val nfseNumber: String,
@@ -36,16 +42,19 @@ data class NfseResult(
     val nfse: Nfse,
     /** The signed DPS exactly as sent, for the application to keep. */
     val dpsXml: String,
+    val alerts: List<NfseError> = emptyList(),
 ) {
     val nfseXml: String get() = nfse.xml
 }
 
 /**
- * Municipal parameters (`/parametros_municipais/…`). The official manual does not publish the JSON layout, so the
- * body is exposed as returned; [raw] is the parsed JSON object.
+ * A response of the ADN Parâmetros Municipais service. Every endpoint answers `{ "mensagem": …, <payload>: … }`
+ * (`adn-parametrizacao.openapi.json`); [raw] is the whole parsed JSON object and [message] its `mensagem`.
  */
 data class MunicipalParameters(
     val municipalityIbge: Int,
     val serviceCode: String? = null,
+    val competence: LocalDate? = null,
+    val message: String? = null,
     val raw: Map<String, Any?>,
 )

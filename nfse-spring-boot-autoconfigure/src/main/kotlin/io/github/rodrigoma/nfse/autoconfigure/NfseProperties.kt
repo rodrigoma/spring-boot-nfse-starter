@@ -88,13 +88,24 @@ data class NfseProperties(
 
     /** Absolute URLs overriding the ones implied by [environment] — e.g. a local stub. */
     data class BaseUrl(
+        /** Sefin Nacional: emission, lookup, events. */
         val sefin: String? = null,
+        /** ADN Contribuintes: distribution by NSU, events by access key. */
+        val adn: String? = null,
+        /** ADN DANFSe. */
         val danfse: String? = null,
+        /** ADN Parâmetros Municipais. */
+        val municipalParameters: String? = null,
     )
 
     fun resolvedSefinBaseUrl(): String = baseUrl.sefin ?: environment.sefinBaseUrl()
 
+    fun resolvedAdnBaseUrl(): String = baseUrl.adn ?: environment.adnBaseUrl()
+
     fun resolvedDanfseBaseUrl(): String = baseUrl.danfse ?: environment.danfseBaseUrl()
+
+    fun resolvedMunicipalParametersBaseUrl(): String =
+        baseUrl.municipalParameters ?: environment.municipalParametersBaseUrl()
 
     fun resolvedApplicationVersion(): String =
         (applicationVersion ?: defaultApplicationVersion()).take(APPLICATION_VERSION_MAX_LENGTH)
@@ -162,7 +173,13 @@ data class NfseProperties(
             }
         }
         applicationVersion?.let { require(it.isNotBlank()) { "nfse.application-version must not be blank" } }
-        val urls = listOf("nfse.base-url.sefin" to baseUrl.sefin, "nfse.base-url.danfse" to baseUrl.danfse)
+        val urls =
+            listOf(
+                "nfse.base-url.sefin" to baseUrl.sefin,
+                "nfse.base-url.adn" to baseUrl.adn,
+                "nfse.base-url.danfse" to baseUrl.danfse,
+                "nfse.base-url.municipal-parameters" to baseUrl.municipalParameters,
+            )
         urls.forEach { (name, url) ->
             url?.let {
                 require(runCatching { URI(it).isAbsolute }.getOrDefault(false)) {

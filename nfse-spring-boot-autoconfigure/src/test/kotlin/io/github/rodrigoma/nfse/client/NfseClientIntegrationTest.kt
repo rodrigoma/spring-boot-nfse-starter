@@ -1,6 +1,7 @@
 package io.github.rodrigoma.nfse.client
 
 import io.github.rodrigoma.nfse.autoconfigure.NfseAutoConfiguration
+import io.github.rodrigoma.nfse.exception.NfseError
 import io.github.rodrigoma.nfse.exception.NfseException
 import io.github.rodrigoma.nfse.model.dps.Amounts
 import io.github.rodrigoma.nfse.model.dps.DpsId
@@ -9,6 +10,8 @@ import io.github.rodrigoma.nfse.model.event.CancellationReason
 import io.github.rodrigoma.nfse.model.event.NfseEventType
 import io.github.rodrigoma.nfse.model.request.DpsRequest
 import io.github.rodrigoma.nfse.model.request.ServiceRequest
+import io.github.rodrigoma.nfse.model.response.DistributedDocumentType
+import io.github.rodrigoma.nfse.model.response.DistributionStatus
 import io.github.rodrigoma.nfse.support.NfseStubServer
 import io.github.rodrigoma.nfse.support.TestCertificates
 import io.github.rodrigoma.nfse.support.TestDps
@@ -34,6 +37,7 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.LocalDate
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManagerFactory
 
@@ -63,7 +67,9 @@ class NfseClientIntegrationTest {
                     "nfse.emitter.municipality-ibge=${TestDps.MUNICIPALITY}",
                     "nfse.emitter.municipal-registration=12345",
                     "nfse.base-url.sefin=${stub.baseUrl}",
+                    "nfse.base-url.adn=${stub.baseUrl}/contribuintes",
                     "nfse.base-url.danfse=${stub.baseUrl}/danfse",
+                    "nfse.base-url.municipal-parameters=${stub.baseUrl}/parametrizacao",
                     "nfse.application-version=test/1.0",
                     "nfse.read-timeout=1s",
                     "nfse.log-requests=true",
@@ -103,6 +109,7 @@ class NfseClientIntegrationTest {
                 "idDps" to "DPS355030821234567800019500001000000000000001",
                 "chaveAcesso" to accessKey,
                 "nfseXmlGZipB64" to GzipBase64.encode(TestXml.nfse()),
+                "alertas" to listOf(mapOf("codigo" to "A0001", "descricao" to "Alerta de teste", "complemento" to "x")),
             ),
         )
 
@@ -119,6 +126,7 @@ class NfseClientIntegrationTest {
             assertThat(result.processedAt).isNotNull()
             assertThat(result.nfseXml).isEqualTo(TestXml.nfse())
             assertThat(result.nfse.netAmount).isEqualByComparingTo("98.00")
+            assertThat(result.alerts).containsExactly(NfseError("A0001", "Alerta de teste", "x"))
             assertThat(result.dpsXml)
                 .startsWith("<?xml")
                 .contains("<Signature xmlns=\"http://www.w3.org/2000/09/xmldsig#\">")
@@ -201,15 +209,24 @@ class NfseClientIntegrationTest {
             val nfse = client.get(accessKey)
             assertThat(nfse.accessKey).isEqualTo(accessKey)
             assertThat(nfse.statusCode).isEqualTo("100")
-            assertThatThrownBy { client.get("0".repeat(50)) }.isInstanceOf(NfseException.NotFound::class.java)
+            val notFound = """{"erro":{"codigo":"E1234","descricao":"Chave de acesso não encontrada."}}"""
+            stub.stub("GET", "/nfse/${"0".repeat(50)}", 404, notFound)
+            assertThatThrownBy { client.get("0".repeat(50)) }
+                .isInstanceOf(NfseException.NotFound::class.java)
+                .hasMessageContaining("Chave de acesso não encontrada")
+            val invalid = """{"erro":{"codigo":"E0002","descricao":"Chave inválida."}}"""
+            stub.stub("GET", "/nfse/${"1".repeat(50)}", 400, invalid)
+            assertThatThrownBy { client.get("1".repeat(50)) }
+                .isInstanceOf(NfseException.Rejected::class.java)
+                .satisfies({ assertThat((it as NfseException.Rejected).errors.single().code).isEqualTo("E0002") })
         }
     }
 
     @Test
     fun `looks a DPS up by identifier with GET and HEAD`() {
         val dpsId = DpsId(TestDps.MUNICIPALITY, FederalId.Cnpj(TestDps.CNPJ), 1, 1)
-        stub.stub("GET", "/dps/${dpsId.digits}", 200, """{"tipoAmbiente":2,"chaveAcesso":"$accessKey"}""")
-        stub.stub("HEAD", "/dps/${dpsId.digits}", 200)
+        stub.stub("GET", "/dps/${dpsId.value}", 200, """{"tipoAmbiente":2,"chaveAcesso":"$accessKey"}""")
+        stub.stub("HEAD", "/dps/${dpsId.value}", 200)
         withClient { client ->
             assertThat(client.accessKeyOf(dpsId)).isEqualTo(accessKey)
             assertThat(client.exists(dpsId)).isTrue()
@@ -218,7 +235,7 @@ class NfseClientIntegrationTest {
             assertThat(client.exists(unknown)).isFalse()
 
             val unexpected = dpsId.copy(number = 3)
-            stub.stub("GET", "/dps/${unexpected.digits}", 200, """{"tipoAmbiente":2}""")
+            stub.stub("GET", "/dps/${unexpected.value}", 200, """{"tipoAmbiente":2}""")
             assertThatThrownBy { client.accessKeyOf(unexpected) }
                 .isInstanceOf(NfseException.Unavailable::class.java)
                 .hasMessageContaining("chaveAcesso")
@@ -232,9 +249,6 @@ class NfseClientIntegrationTest {
                 mapOf(
                     "tipoAmbiente" to 2,
                     "dataHoraProcessamento" to "2026-09-20T13:00:00Z",
-                    "idEvento" to "EVT${accessKey}101101001",
-                    "tipoEvento" to "101101",
-                    "numSeqEvento" to 1,
                     "eventoXmlGZipB64" to GzipBase64.encode(TestXml.event()),
                 ),
             )
@@ -257,46 +271,106 @@ class NfseClientIntegrationTest {
     }
 
     @Test
-    fun `lists events, accepting a list or a single object, and builds one without XML from the JSON fields`() {
-        val withList =
+    fun `lists events through the ADN, treating 404-with-body as empty and 400 as rejection`() {
+        val lote =
             mapper.writeValueAsString(
                 mapOf(
-                    "eventos" to
+                    "StatusProcessamento" to "DOCUMENTOS_LOCALIZADOS",
+                    "LoteDFe" to
                         listOf(
-                            mapOf("eventoXmlGZipB64" to GzipBase64.encode(TestXml.event())),
                             mapOf(
-                                "idEvento" to "EVT1",
-                                "tipoEvento" to "e105102",
-                                "numSeqEvento" to 2,
+                                "NSU" to 7,
+                                "ChaveAcesso" to accessKey,
+                                "TipoDocumento" to "EVENTO",
+                                "TipoEvento" to "CANCELAMENTO",
+                                "ArquivoXml" to GzipBase64.encode(TestXml.event()),
+                                "DataHoraGeracao" to "2026-09-20T13:00:00-03:00",
                             ),
                         ),
+                    "TipoAmbiente" to "HOMOLOGACAO",
                 ),
             )
-        stub.stub("GET", "/nfse/$accessKey/eventos", 200, withList)
+        stub.stub("GET", "/contribuintes/NFSe/$accessKey/Eventos", 200, lote)
         withClient { client ->
             val events = client.events(accessKey)
-            assertThat(events).hasSize(2)
+            assertThat(events).hasSize(1)
             assertThat(events[0].type).isEqualTo(NfseEventType.CANCELLATION)
-            assertThat(events[1].id).isEqualTo("EVT1")
-            assertThat(events[1].type).isEqualTo(NfseEventType.CANCELLATION_BY_SUBSTITUTION)
-            assertThat(events[1].sequence).isEqualTo(2)
-            assertThat(events[1].xml).isEmpty()
+            assertThat(events[0].accessKey).isEqualTo(accessKey)
         }
 
-        stub.stub(
-            "GET",
-            "/nfse/$accessKey/eventos",
-            200,
+        val none = """{"StatusProcessamento":"NENHUM_DOCUMENTO_LOCALIZADO","LoteDFe":[],"TipoAmbiente":"HOMOLOGACAO"}"""
+        stub.stub("GET", "/contribuintes/NFSe/$accessKey/Eventos", 404, none)
+        withClient { client -> assertThat(client.events(accessKey)).isEmpty() }
+
+        val rejected =
+            """{"StatusProcessamento":"REJEICAO","Erros":[{"Codigo":"E9001","Descricao":"CNPJ não autorizado"}]}"""
+        stub.stub("GET", "/contribuintes/NFSe/$accessKey/Eventos", 400, rejected)
+        withClient { client ->
+            assertThatThrownBy { client.events(accessKey) }
+                .isInstanceOf(NfseException.Rejected::class.java)
+                .hasMessageContaining("E9001")
+        }
+    }
+
+    @Test
+    fun `fetches one event from the Sefin by type and sequence`() {
+        val single = mapper.writeValueAsString(mapOf("eventoXmlGZipB64" to GzipBase64.encode(TestXml.event())))
+        stub.stub("GET", "/nfse/$accessKey/eventos/101101/1", 200, single)
+        withClient { client ->
+            val event = client.event(accessKey, NfseEventType.CANCELLATION)
+            assertThat(event.id).isEqualTo("EVT${accessKey}101101001")
+            assertThatThrownBy { client.event(accessKey, NfseEventType.CANCELLATION, 2) }
+                .isInstanceOf(NfseException.NotFound::class.java)
+        }
+    }
+
+    @Test
+    fun `distributes documents by NSU with the cursor semantics of the ADN`() {
+        val lote =
             mapper.writeValueAsString(
                 mapOf(
-                    "eventoXmlGZipB64" to GzipBase64.encode(TestXml.event()),
+                    "StatusProcessamento" to "DOCUMENTOS_LOCALIZADOS",
+                    "LoteDFe" to
+                        listOf(
+                            mapOf(
+                                "NSU" to 41,
+                                "ChaveAcesso" to accessKey,
+                                "TipoDocumento" to "NFSE",
+                                "ArquivoXml" to GzipBase64.encode(TestXml.nfse()),
+                                "DataHoraGeracao" to "2026-09-20T13:00:00-03:00",
+                            ),
+                            mapOf(
+                                "NSU" to 42,
+                                "ChaveAcesso" to accessKey,
+                                "TipoDocumento" to "EVENTO",
+                                "TipoEvento" to "CANCELAMENTO",
+                                "ArquivoXml" to GzipBase64.encode(TestXml.event()),
+                            ),
+                        ),
+                    "Alertas" to listOf(mapOf("Codigo" to "A1", "Descricao" to "aviso")),
+                    "TipoAmbiente" to "HOMOLOGACAO",
                 ),
-            ),
-        )
-        withClient { client -> assertThat(client.events(accessKey)).hasSize(1) }
+            )
+        stub.stub("GET", "/contribuintes/DFe/40", 200, lote)
+        stub.stub("GET", "/contribuintes/DFe/43", 404, """{"StatusProcessamento":"NENHUM_DOCUMENTO_LOCALIZADO"}""")
+        withClient { client ->
+            val batch = client.distribution(40, cnpj = "12.345.678/0001-95")
+            assertThat(batch.status).isEqualTo(DistributionStatus.FOUND)
+            assertThat(batch.documents).extracting<Long> { it.nsu }.containsExactly(41L, 42L)
+            assertThat(batch.documents[0].type).isEqualTo(DistributedDocumentType.NFSE)
+            assertThat(batch.documents[0].xml).isEqualTo(TestXml.nfse())
+            assertThat(batch.documents[1].eventType).isEqualTo("CANCELAMENTO")
+            assertThat(batch.documents[1].generatedAt).isNull()
+            assertThat(batch.alerts.single().code).isEqualTo("A1")
+            assertThat(batch.nextNsu).isEqualTo(43)
+            assertThat(stub.requests.last().path).isEqualTo("/contribuintes/DFe/40")
 
-        stub.stub("GET", "/nfse/$accessKey/eventos", 200, "{}")
-        withClient { client -> assertThat(client.events(accessKey)).isEmpty() }
+            val end = client.distribution(43)
+            assertThat(end.status).isEqualTo(DistributionStatus.NONE_FOUND)
+            assertThat(end.documents).isEmpty()
+            assertThat(end.nextNsu).isEqualTo(43)
+        }
+        assertThat(stub.requests.first { it.path == "/contribuintes/DFe/40" }.headers).isNotEmpty()
     }
 
     @Test
@@ -315,17 +389,68 @@ class NfseClientIntegrationTest {
     }
 
     @Test
-    fun `fetches municipal parameters as raw maps`() {
-        val agreementJson = """{"parametrosConvenio":{"aderenteAmbienteNacional":1}}"""
-        stub.stub("GET", "/parametros_municipais/3550308/convenio", 200, agreementJson)
-        stub.stub("GET", "/parametros_municipais/3550308/010701", 200, """{"aliquotas":[{"aliq":2.0}]}""")
+    fun `fetches municipal parameters from the ADN parametrizacao service`() {
+        val base = "/parametrizacao/3548807"
+        stub.stub(
+            "GET",
+            "$base/convenio",
+            200,
+            """{"mensagem":null,"parametrosConvenio":{"aderenteAmbienteNacional":1}}""",
+        )
+        stub.stub("GET", "$base/010701/2026-09-01/aliquota", 200, """{"aliquotas":{"010701":[{"Aliq":2.0}]}}""")
+        stub.stub("GET", "$base/010701/historicoaliquotas", 200, """{"aliquotas":{}}""")
+        stub.stub(
+            "GET",
+            "$base/11111111111111/2026-09-01/beneficio",
+            404,
+            """{"mensagem":"Benefício não encontrado"}""",
+        )
+        stub.stub("GET", "$base/010701/2026-09-01/regimes_especiais", 200, """{"regimesEspeciais":{}}""")
+        val withholdingsJson = """{"mensagem":"ok","retencoes":{"artigoSexto":{"habilitado":false}}}"""
+        stub.stub("GET", "$base/2026-09-01/retencoes", 200, withholdingsJson)
+        val competence = LocalDate.of(2026, 9, 1)
         withClient { client ->
-            val agreement = client.municipalAgreement(3550308)
+            val parameters = client.municipalParameters
+            val agreement = parameters.agreement(3548807)
             assertThat(agreement.serviceCode).isNull()
             assertThat(agreement.raw["parametrosConvenio"]).isEqualTo(mapOf("aderenteAmbienteNacional" to 1))
-            val parameters = client.municipalParameters(3550308, "010701")
-            assertThat(parameters.serviceCode).isEqualTo("010701")
-            assertThat(parameters.raw).containsKey("aliquotas")
+            val rates = parameters.rates(3548807, "010701", competence)
+            assertThat(rates.serviceCode).isEqualTo("010701")
+            assertThat(rates.competence).isEqualTo(competence)
+            assertThat(rates.raw).containsKey("aliquotas")
+            assertThat(parameters.rateHistory(3548807, "010701").raw).containsKey("aliquotas")
+            assertThatThrownBy { parameters.benefit(3548807, "11111111111111", competence) }
+                .isInstanceOf(NfseException.NotFound::class.java)
+                .hasMessageContaining("Benefício não encontrado")
+            assertThat(parameters.specialRegimes(3548807, "010701", competence).raw).containsKey("regimesEspeciais")
+            val withholdings = parameters.withholdings(3548807, competence)
+            assertThat(withholdings.message).isEqualTo("ok")
+            assertThat(withholdings.raw).containsKey("retencoes")
+        }
+    }
+
+    @Test
+    fun `refuses invalid check digits before building the XML`() {
+        withClient { client ->
+            val badTaker = request.copy(taker = TestDps.taker.copy(id = FederalId.Cpf("12345678900")))
+            assertThatThrownBy { client.emit(badTaker) }
+                .isInstanceOf(NfseException.Validation::class.java)
+                .satisfies({ assertThat((it as NfseException.Validation).errors.single().code).isEqualTo("E0210") })
+            assertThat(stub.requests).isEmpty()
+        }
+    }
+
+    @Test
+    fun `429 carries Retry-After`() {
+        stub.stub("POST", "/nfse", 429, "", headers = mapOf("Retry-After" to "120"))
+        withClient { client ->
+            assertThatThrownBy { client.emit(request) }
+                .isInstanceOf(NfseException.Unavailable::class.java)
+                .satisfies({
+                    val unavailable = it as NfseException.Unavailable
+                    assertThat(unavailable.statusCode).isEqualTo(429)
+                    assertThat(unavailable.retryAfter).isEqualTo(java.time.Duration.ofSeconds(120))
+                })
         }
     }
 

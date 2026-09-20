@@ -21,6 +21,14 @@ internal class StoredNote(
     val events: MutableList<StoredEvent> = mutableListOf(),
 )
 
+internal data class Distributed(
+    val nsu: Long,
+    val note: StoredNote,
+    val xml: String,
+    val type: String,
+    val eventTypeCode: String?,
+)
+
 internal class StoredEvent(
     val id: String,
     val typeCode: String,
@@ -34,8 +42,21 @@ internal class StoredEvent(
  */
 internal class LocalSefinStore {
     private val notes = ConcurrentHashMap<String, StoredNote>()
+    private val order = java.util.concurrent.CopyOnWriteArrayList<String>()
     private val byDps = ConcurrentHashMap<String, String>()
     private val nextNumber = AtomicLong(1)
+
+    /** Every document (note, then its events) in emission order, numbered from 1, for the NSU distribution. */
+    fun documentsFrom(nsu: Long): List<Distributed> {
+        var next = 1L
+        val all = mutableListOf<Distributed>()
+        for (note in order) {
+            val stored = notes.getValue(note)
+            all += Distributed(next++, stored, stored.nfseXml, "NFSE", null)
+            stored.events.forEach { all += Distributed(next++, stored, it.xml, "EVENTO", it.typeCode) }
+        }
+        return all.filter { it.nsu > nsu }
+    }
 
     fun findByDps(dpsDigits: String): StoredNote? = byDps[dpsDigits]?.let { notes[it] }
 
@@ -73,6 +94,7 @@ internal class LocalSefinStore {
         val note = StoredNote(accessKey, digits, XmlSupport.serialize(document))
         notes[accessKey] = note
         byDps[digits] = accessKey
+        order += accessKey
         return note
     }
 

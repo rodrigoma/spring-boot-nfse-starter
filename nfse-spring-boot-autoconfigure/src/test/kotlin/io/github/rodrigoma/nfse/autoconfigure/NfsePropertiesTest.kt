@@ -43,6 +43,10 @@ class NfsePropertiesTest {
                 assertThat(props.environment).isEqualTo(NfseEnvironment.PRODUCTION)
                 assertThat(props.resolvedSefinBaseUrl()).isEqualTo("https://sefin.nfse.gov.br/SefinNacional")
                 assertThat(props.resolvedDanfseBaseUrl()).isEqualTo("https://adn.nfse.gov.br/danfse")
+                assertThat(props.resolvedAdnBaseUrl()).isEqualTo("https://adn.nfse.gov.br/contribuintes")
+                assertThat(
+                    props.resolvedMunicipalParametersBaseUrl(),
+                ).isEqualTo("https://adn.nfse.gov.br/parametrizacao")
                 assertThat(props.emitterFederalId()).isEqualTo(FederalId.Cnpj("12345678000195"))
                 assertThat(props.emitter.dpsSeries).isEqualTo(7)
                 assertThat(props.emitter.taxRegime.simplesNacional).isEqualTo(SimplesNacionalOption.ME_EPP)
@@ -65,6 +69,9 @@ class NfsePropertiesTest {
             assertThat(props.resolvedSefinBaseUrl())
                 .isEqualTo("https://sefin.producaorestrita.nfse.gov.br/SefinNacional")
             assertThat(props.resolvedDanfseBaseUrl()).isEqualTo("https://adn.producaorestrita.nfse.gov.br/danfse")
+            assertThat(props.resolvedAdnBaseUrl()).isEqualTo("https://adn.producaorestrita.nfse.gov.br/contribuintes")
+            assertThat(props.resolvedMunicipalParametersBaseUrl())
+                .isEqualTo("https://adn.producaorestrita.nfse.gov.br/parametrizacao")
             assertThat(props.emitterAddress()).isNull()
             assertThat(props.emitterProvider().name).isNull()
         }
@@ -116,6 +123,7 @@ class NfsePropertiesTest {
                 arrayOf(*required, "nfse.emitter.address.street=Rua") to "nfse.emitter.address",
                 arrayOf(*required, "nfse.application-version= ") to "application-version",
                 arrayOf(*required, "nfse.base-url.sefin=/relative") to "nfse.base-url.sefin",
+                arrayOf(*required, "nfse.base-url.adn=relative") to "nfse.base-url.adn",
             )
         cases.forEach { (values, message) ->
             contextRunner.withPropertyValues(*values).run { context ->

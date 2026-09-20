@@ -1,5 +1,7 @@
 package io.github.rodrigoma.nfse.exception
 
+import java.time.Duration
+
 /**
  * One error entry returned by the Sefin Nacional when it rejects a DPS or an event request, or produced by the
  * local XSD validation before anything is sent.
@@ -40,11 +42,15 @@ sealed class NfseException(
         cause: Throwable? = null,
     ) : NfseException(message, cause)
 
-    /** Network failure, timeout, HTTP 5xx or 429 — the Sefin Nacional or the DANFSE service is not reachable. */
+    /**
+     * Network failure, timeout, HTTP 5xx or 429 — the service is not reachable or healthy. Retry later;
+     * [retryAfter] carries the `Retry-After` header of a 429 when the service sent one.
+     */
     class Unavailable(
         message: String,
         val statusCode: Int? = null,
         cause: Throwable? = null,
+        val retryAfter: Duration? = null,
     ) : NfseException(message, cause)
 
     /** HTTP 401/403 — the connection certificate was not accepted for this call. */

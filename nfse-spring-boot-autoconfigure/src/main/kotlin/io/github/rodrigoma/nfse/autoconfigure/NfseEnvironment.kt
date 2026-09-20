@@ -19,9 +19,24 @@ enum class NfseEnvironment(
             RESTRICTED_PRODUCTION -> "https://sefin.producaorestrita.nfse.gov.br/SefinNacional"
         }
 
+    /** ADN Contribuintes — distribution by NSU and events by access key. */
+    fun adnBaseUrl(): String =
+        when (this) {
+            PRODUCTION -> "https://adn.nfse.gov.br/contribuintes"
+            RESTRICTED_PRODUCTION -> "https://adn.producaorestrita.nfse.gov.br/contribuintes"
+        }
+
+    /** ADN DANFSe — the PDF (official generation suspended by NT 008/2026, see README). */
     fun danfseBaseUrl(): String =
         when (this) {
             PRODUCTION -> "https://adn.nfse.gov.br/danfse"
             RESTRICTED_PRODUCTION -> "https://adn.producaorestrita.nfse.gov.br/danfse"
+        }
+
+    /** ADN Parâmetros Municipais — agreement, rates, benefits, special regimes and withholdings. */
+    fun municipalParametersBaseUrl(): String =
+        when (this) {
+            PRODUCTION -> "https://adn.nfse.gov.br/parametrizacao"
+            RESTRICTED_PRODUCTION -> "https://adn.producaorestrita.nfse.gov.br/parametrizacao"
         }
 }
