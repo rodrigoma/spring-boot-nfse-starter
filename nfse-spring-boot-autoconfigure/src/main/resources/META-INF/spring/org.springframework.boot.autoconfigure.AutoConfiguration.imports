@@ -1,0 +1,2 @@
+io.github.rodrigoma.nfse.autoconfigure.NfseAutoConfiguration
+io.github.rodrigoma.nfse.autoconfigure.NfseHealthIndicatorAutoConfiguration
