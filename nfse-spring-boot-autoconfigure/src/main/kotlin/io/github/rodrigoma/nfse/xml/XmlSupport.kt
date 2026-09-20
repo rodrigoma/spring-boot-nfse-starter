@@ -31,7 +31,8 @@ object XmlSupport {
     /** `TSDateTimeUTC` requires `±hh:mm` — `Z` is not accepted, hence `xxx` instead of `XXX`. */
     private val dateTimeFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssxxx")
 
-    private val documentBuilderFactory: DocumentBuilderFactory =
+    // Factories are created per call: the JAXP factories are not guaranteed thread-safe and the client is a singleton.
+    private fun documentBuilderFactory(): DocumentBuilderFactory =
         DocumentBuilderFactory.newInstance().apply {
             isNamespaceAware = true
             setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
@@ -40,23 +41,23 @@ object XmlSupport {
             isExpandEntityReferences = false
         }
 
-    private val transformerFactory: TransformerFactory =
+    private fun transformerFactory(): TransformerFactory =
         TransformerFactory.newInstance().apply {
             setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
         }
 
     fun newDocument(): Document =
-        documentBuilderFactory.newDocumentBuilder().newDocument().apply { xmlStandalone = true }
+        documentBuilderFactory().newDocumentBuilder().newDocument().apply { xmlStandalone = true }
 
     fun parse(xml: String): Document =
-        documentBuilderFactory.newDocumentBuilder().parse(xml.byteInputStream(Charsets.UTF_8)).apply {
+        documentBuilderFactory().newDocumentBuilder().parse(xml.byteInputStream(Charsets.UTF_8)).apply {
             xmlStandalone = true
         }
 
     /** Serializes without re-indenting, so a signed document keeps the bytes that were signed. */
     fun serialize(document: Document): String {
         val writer = StringWriter()
-        transformerFactory
+        transformerFactory()
             .newTransformer()
             .apply {
                 setOutputProperty(OutputKeys.ENCODING, "UTF-8")
