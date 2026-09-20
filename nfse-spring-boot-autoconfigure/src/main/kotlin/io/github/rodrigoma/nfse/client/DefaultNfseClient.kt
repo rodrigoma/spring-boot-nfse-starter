@@ -40,6 +40,7 @@ class DefaultNfseClient(
     private val dpsXmlBuilder: DpsXmlBuilder = DpsXmlBuilder(),
     private val eventXmlBuilder: EventXmlBuilder = EventXmlBuilder(),
     private val clock: Clock = Clock.systemDefaultZone(),
+    private val danfseRenderer: DanfsePdfRenderer? = null,
 ) : NfseClient {
     private val assembler = DpsAssembler(properties, clock)
     private val signer: XmlSigner = certificate.signer()
@@ -182,6 +183,9 @@ class DefaultNfseClient(
     ): DistributionBatch = adn.distribution(nsu, cnpj?.let { FederalId.Cnpj(it).value })
 
     override fun danfse(accessKey: String): ByteArray =
+        danfseRenderer?.render(get(accessKey), events(accessKey)) ?: fetchDanfse(accessKey)
+
+    private fun fetchDanfse(accessKey: String): ByteArray =
         nfseCall {
             restClient
                 .get()

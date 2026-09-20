@@ -21,6 +21,7 @@ returns), **Sefin Nacional** (emission host), **ADN** (distribution host), **NSU
 ./gradlew spotlessApply                # fix formatting (ktlint, max line 120 via .editorconfig)
 ./gradlew detekt
 ./gradlew :nfse-spring-boot-autoconfigure:test --tests '*DpsXmlBuilderTest*'
+./gradlew :nfse-spring-boot-danfse:renderSamples   # fixtures → build/danfse/*.pdf for a visual check of the DANFSe
 ./gradlew :nfse-spring-boot-sample:bootRun --args='--spring.profiles.active=local'   # sandbox, no certificate
 ```
 
@@ -39,6 +40,11 @@ nfse-spring-boot-autoconfigure/   the library — io.github.rodrigoma.nfse
   xml/             DpsXmlBuilder, EventXmlBuilder, XsdValidator, XmlSigner, GzipBase64, NfseXmlParser
   resources/META-INF/nfse/xsd/1.01/   official XSD bundle 2026-07-27, verbatim
 nfse-spring-boot-starter/         transitive dependency only
+nfse-spring-boot-danfse/          optional DANFSe v2.0 renderer (NT 008/2026) — io.github.rodrigoma.nfse.danfse
+  DanfseRenderer / DanfseAutoConfiguration / NoteStatus / DanfseOptions
+  layout/          NfseView (DOM view of the NFSe XML), DanfseLayout (blocks in cm, table 2.4.5 of the NT),
+                   PdfCanvas (PDFBox, cm from top-left, Helvetica), QrCode (ZXing), Formats, Places, Descriptions
+  resources/       gov.br logo, municipios-ibge.csv (code;name;uf), paises-iso2.csv
 nfse-spring-boot-sample/          demo app; `local` profile = in-process fake Sefin/ADN with mTLS
 docs/specs/                       OpenAPI specs of the four services (reference, not shipped)
 docs/standards-watch.md           Notas Técnicas / schema radar and check history
@@ -68,6 +74,10 @@ docs/superpowers/specs/           design notes
   computes the DV with ASCII − 48.
 - **Nothing is logged with secrets**: `NfseProperties.toString()` hides the password/blob, the interceptor replaces
   `…XmlGZipB64` payloads with their size.
+- **The DANFSe is a pure function of the `NFSe` XML + events.** `NfseView` reads the DOM by local name and formats
+  every value (`-` for empty ones); `DanfseLayout` only positions. Nothing is computed from application state, the
+  core module never depends on PDFBox (`DanfsePdfRenderer` is the seam) and the layout constants are the cm of
+  NT 008 — change them only against the NT.
 - **Validate before consuming a number.** `emit` runs `DpsPreflight` (check digits) and the XSD before anything
   touches the wire — applications should take the DPS number only after `emit` returns or fails with `Rejected`.
 
