@@ -14,13 +14,16 @@ read -r -s -p "Password of $PFX: " PFX_PASS; echo
 
 fetch() { curl -sS --fail --cert-type P12 --cert "$PFX:$PFX_PASS" "$@"; }
 
+# The four services under docs/specs/. The DANFSe endpoint is suspended by NT 008/2026 (the library renders
+# the PDF locally), but its Swagger still documents the path — keep fetching it to notice when it returns.
 declare -A DOCS=(
   [sefin]="https://sefin.producaorestrita.nfse.gov.br/API/SefinNacional/docs/index"
   [adn]="https://adn.producaorestrita.nfse.gov.br/contribuintes/docs/index.html"
   [danfse]="https://adn.producaorestrita.nfse.gov.br/danfse/docs/index.html"
+  [parametrizacao]="https://adn.producaorestrita.nfse.gov.br/parametrizacao/docs/index.html"
 )
 
-for name in "${!DOCS[@]}"; do
+for name in sefin adn danfse parametrizacao; do
   url="${DOCS[$name]}"
   base="${url%/docs/*}"
   echo "== $name: $url"
