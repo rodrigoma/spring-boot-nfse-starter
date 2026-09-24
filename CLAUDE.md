@@ -32,7 +32,8 @@ JDK 21 is required (`JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Cont
 ```
 nfse-spring-boot-autoconfigure/   the library — io.github.rodrigoma.nfse
   autoconfigure/   NfseAutoConfiguration, NfseProperties, NfseEnvironment, health indicator
-  certificate/     PKCS#12 loading + ICP-Brasil checks, SSLContext (mTLS)
+  certificate/     PKCS#12 loading from four sources + ICP-Brasil checks, SSLContext (mTLS),
+                   NfseCertificateProvider (the vault seam)
   client/          NfseClient (Sefin), AdnClient, MunicipalParametersClient, DpsAssembler, DpsPreflight
   exception/       NfseException (sealed: Rejected, Validation, Certificate, Unavailable, Unauthorized, NotFound)
   http/            error handler, logging interceptor with payload masking
@@ -78,6 +79,15 @@ docs/superpowers/specs/           design notes
   every value (`-` for empty ones); `DanfseLayout` only positions. Nothing is computed from application state, the
   core module never depends on PDFBox (`DanfsePdfRenderer` is the seam) and the layout constants are the cm of
   NT 008 — change them only against the NT.
+- **Four certificate sources, one at a time.** `location` (Resource), `base64`, `ssl-bundle`, or an
+  `NfseCertificateProvider` bean — which wins over the properties, so the "exactly one source" check lives in
+  `NfseCertificate.load`, not in `NfseProperties.afterPropertiesSet` (only the loader knows the bean exists).
+  Never write the PKCS#12 to disk; strip whitespace before the strict Base64 decoder (wrapped `base64` output is
+  the common case, and the MIME decoder would hide typos as "corrupt PKCS#12").
+- **An expired certificate does not fail the context.** Structural checks (v3, not a CA, key usages) do — they
+  mean the wrong file. Expiry is logged, exposed (`expiresAt`, `isUsable`), reported DOWN by the health indicator
+  and enforced by `requireUsable()` in `emit`/`cancel`; reads keep working. Taking the whole application down over
+  a yearly certificate would trade a fiscal problem for an outage.
 - **Validate before consuming a number.** `emit` runs `DpsPreflight` (check digits) and the XSD before anything
   touches the wire — applications should take the DPS number only after `emit` returns or fails with `Rejected`.
 

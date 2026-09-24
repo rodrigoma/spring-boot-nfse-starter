@@ -110,6 +110,19 @@ object TestCertificates {
         return Identity(keyPair, JcaX509CertificateConverter().getCertificate(builder.build(signer(keyPair))))
     }
 
+    /** A PKCS#12 with two private-key entries, for the `alias` property. */
+    fun twoKeyEntries(
+        first: Identity = emitter(),
+        second: Identity = emitter(cnpj = "98765432000198"),
+        password: String = PASSWORD,
+    ): ByteArray =
+        KeyStore.getInstance("PKCS12").run {
+            load(null, null)
+            setKeyEntry("outra", second.keyPair.private, password.toCharArray(), arrayOf(second.certificate))
+            setKeyEntry("emitter", first.keyPair.private, password.toCharArray(), arrayOf(first.certificate))
+            ByteArrayOutputStream().also { store(it, password.toCharArray()) }.toByteArray()
+        }
+
     fun trustStoreOf(vararg certificates: X509Certificate): KeyStore =
         KeyStore.getInstance("PKCS12").apply {
             load(null, null)

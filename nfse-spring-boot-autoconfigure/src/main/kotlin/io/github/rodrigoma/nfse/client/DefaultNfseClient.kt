@@ -52,6 +52,7 @@ class DefaultNfseClient(
     override fun emit(request: DpsRequest): NfseResult = emit(assembler.assemble(request))
 
     override fun emit(dps: Dps): NfseResult {
+        certificate.requireUsable()
         DpsPreflight.check(dps)
         val document = dpsXmlBuilder.build(dps)
         signer.sign(document, DpsXmlBuilder.infDps(document), document.documentElement)
@@ -133,6 +134,7 @@ class DefaultNfseClient(
         reason: CancellationReason,
         justification: String,
     ): NfseEvent {
+        certificate.requireUsable()
         val request =
             CancellationRequest(
                 environment = properties.environment,

@@ -1,5 +1,6 @@
 package io.github.rodrigoma.nfse.autoconfigure
 
+import io.github.rodrigoma.nfse.certificate.NfseCertificate
 import io.github.rodrigoma.nfse.client.NfseApiPaths
 import io.github.rodrigoma.nfse.exception.NfseException
 import io.github.rodrigoma.nfse.model.dps.DpsId
@@ -23,6 +24,7 @@ class NfseHealthIndicatorAutoConfiguration {
     fun nfseHealthIndicator(
         @Qualifier("nfseRestClient") restClient: RestClient,
         properties: NfseProperties,
+        certificate: NfseCertificate,
     ): HealthIndicator {
         val probe =
             DpsId(
@@ -31,20 +33,35 @@ class NfseHealthIndicatorAutoConfiguration {
                 properties.emitter.dpsSeries,
                 1,
             )
-        return NfseHealthIndicator(restClient, probe)
+        return NfseHealthIndicator(restClient, probe, certificate)
     }
 }
 
 /**
- * `HEAD /dps/{id}` for the emitter's first DPS — a cheap Sefin call that exercises the mTLS handshake; 200 and 404
- * both mean the service is up and accepted the certificate.
+ * The certificate's validity plus `HEAD /dps/{id}` for the emitter's first DPS — a cheap Sefin call that exercises
+ * the mTLS handshake; 200 and 404 both mean the service is up and accepted the certificate.
+ *
+ * An expired certificate is **DOWN**: emission is refused, and this is the alert that should fire before a customer
+ * notices. One that expires soon stays UP, with the date as a detail.
  */
 class NfseHealthIndicator(
     private val restClient: RestClient,
     private val probe: DpsId,
+    private val certificate: NfseCertificate,
 ) : AbstractHealthIndicator() {
     @Suppress("TooGenericExceptionCaught", "SwallowedException")
     override fun doHealthCheck(builder: Health.Builder) {
+        builder.withDetail("certificateExpiresAt", certificate.expiresAt.toString())
+        certificate.unusableReason?.let {
+            builder.down().withDetail("certificate", it)
+            return
+        }
+        if (certificate.expiresWithin(NfseCertificate.EXPIRY_WARNING)) {
+            builder.withDetail(
+                "certificateWarning",
+                "expires in less than ${NfseCertificate.EXPIRY_WARNING.toDays()} days",
+            )
+        }
         try {
             restClient
                 .head()

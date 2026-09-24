@@ -208,7 +208,7 @@ internal class LocalSefin private constructor(
                 directory.toAbsolutePath(),
             )
             return mapOf(
-                "nfse.certificate.pfx-path" to pfx.toString(),
+                "nfse.certificate.location" to "file:$pfx",
                 "nfse.certificate.password" to LocalCertificates.PASSWORD,
                 "nfse.certificate.trust-store-path" to trust.toString(),
                 "nfse.certificate.trust-store-password" to LocalCertificates.PASSWORD,

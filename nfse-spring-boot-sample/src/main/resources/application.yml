@@ -1,7 +1,8 @@
 nfse:
   environment: RESTRICTED_PRODUCTION
   certificate:
-    pfx-path: /path/to/certificado-a1.pfx      # Set the emitter's ICP-Brasil A1 certificate before running
+    location: file:/path/to/certificado-a1.pfx # Set the emitter's ICP-Brasil A1 certificate before running
+                                               # (or base64: / ssl-bundle: — see the README)
     password: ${NFSE_CERTIFICATE_PASSWORD:}
   emitter:
     cnpj: "00000000000000"                     # Emitter CNPJ (digits only or formatted)

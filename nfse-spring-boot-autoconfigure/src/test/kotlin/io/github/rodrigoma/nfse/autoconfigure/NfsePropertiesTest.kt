@@ -14,7 +14,7 @@ class NfsePropertiesTest {
 
     private val required =
         arrayOf(
-            "nfse.certificate.pfx-path=/tmp/cert.pfx",
+            "nfse.certificate.location=file:/tmp/cert.pfx",
             "nfse.certificate.password=secret",
             "nfse.emitter.cnpj=12.345.678/0001-95",
             "nfse.emitter.municipality-ibge=3550308",
@@ -95,7 +95,7 @@ class NfsePropertiesTest {
     fun `accepts a CPF emitter`() {
         contextRunner
             .withPropertyValues(
-                "nfse.certificate.pfx-base64=AAAA",
+                "nfse.certificate.base64=AAAA",
                 "nfse.emitter.cpf=123.456.789-09",
                 "nfse.emitter.municipality-ibge=1",
             ).run { context ->
@@ -109,13 +109,17 @@ class NfsePropertiesTest {
     fun `fails fast on invalid configuration with a message naming the property`() {
         val cases =
             mapOf(
-                arrayOf("nfse.emitter.cnpj=12345678000195", "nfse.emitter.municipality-ibge=1") to "pfx-path",
-                arrayOf(*required, "nfse.certificate.pfx-base64=AAAA") to "exactly one of nfse.certificate",
-                arrayOf("nfse.certificate.pfx-path=/x", "nfse.emitter.municipality-ibge=1") to "nfse.emitter.cnpj",
+                // The certificate sources are not validated here — see CertificateSourcesAutoConfigurationTest,
+                // because only the certificate bean knows whether an NfseCertificateProvider is published.
+                arrayOf("nfse.certificate.location=file:/x", "nfse.emitter.municipality-ibge=1") to "nfse.emitter.cnpj",
                 arrayOf(*required, "nfse.emitter.cpf=12345678909") to "exactly one of nfse.emitter",
-                arrayOf("nfse.certificate.pfx-path=/x", "nfse.emitter.cnpj=123", "nfse.emitter.municipality-ibge=1") to
+                arrayOf(
+                    "nfse.certificate.location=file:/x",
+                    "nfse.emitter.cnpj=123",
+                    "nfse.emitter.municipality-ibge=1",
+                ) to
                     "CNPJ must have",
-                arrayOf("nfse.certificate.pfx-path=/x", "nfse.emitter.cnpj=12345678000195") to "municipality-ibge",
+                arrayOf("nfse.certificate.location=file:/x", "nfse.emitter.cnpj=12345678000195") to "municipality-ibge",
                 arrayOf(*required, "nfse.emitter.dps-series=0") to "dps-series",
                 arrayOf(*required, "nfse.emitter.tax-regime.simples-nacional=me_epp") to "simples-nacional-assessment",
                 arrayOf(*required, "nfse.emitter.tax-regime.simples-nacional-assessment=none") to
@@ -139,7 +143,7 @@ class NfsePropertiesTest {
             NfseProperties(
                 certificate =
                     NfseProperties.Certificate(
-                        pfxBase64 = "SECRET_BLOB",
+                        base64 = "SECRET_BLOB",
                         password = "SECRET_PASSWORD",
                         trustStorePassword = "TS",
                     ),
@@ -148,7 +152,7 @@ class NfsePropertiesTest {
             .doesNotContain("SECRET_BLOB")
             .doesNotContain("SECRET_PASSWORD")
             .contains("password=<hidden>")
-            .contains("pfxBase64=<hidden>")
+            .contains("base64=<hidden>")
     }
 
     @EnableConfigurationProperties(NfseProperties::class)
