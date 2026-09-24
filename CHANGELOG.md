@@ -7,7 +7,22 @@ All notable changes to this project are documented here. The format follows
 
 Initial release candidate.
 
+### Changed
+- `nfse.certificate.pfx-path` → `nfse.certificate.location` (now a `Resource`, so `file:`/`classpath:` work) and
+  `nfse.certificate.pfx-base64` → `nfse.certificate.base64`. Unreleased rename, no compatibility alias.
+- An expired certificate no longer fails the context; see above.
+
 ### Added
+- **Four certificate sources**, none of them assumed: `nfse.certificate.location` (a Spring `Resource` — `file:`,
+  `classpath:`, a plain path), `nfse.certificate.base64` (twelve-factor platforms; line breaks tolerated),
+  `nfse.certificate.ssl-bundle` (a `spring.ssl.bundle.*` of Spring Boot) and an `NfseCertificateProvider` bean
+  that wins over all of them (Vault, KMS, Secrets Manager). Configuring more than one fails at startup naming
+  both; `nfse.certificate.alias` picks the key entry when the PKCS#12 holds several. The PKCS#12 is always opened
+  from a stream, never written to disk.
+- **Certificate expiry is reported instead of fatal**: `NfseCertificate.expiresAt` / `isUsable` /
+  `requireUsable()`, `WARN` under 30 days and `ERROR` past the date at startup, `certificateExpiresAt` and a DOWN
+  status in the health indicator, and `emit` / `cancel` refusing before any request. The context still starts —
+  an expired certificate must not take down an application that does more than issue invoices.
 - `nfse-spring-boot-danfse`, an optional module that renders the DANFSe v2.0 (NT 008/2026) locally from the
   `NFSe` XML with Apache PDFBox and ZXing: one A4 page after the model of Anexo I, QR Code of the public query,
   restricted-production warning, CANCELADA / SUBSTITUÍDA watermark from the events, optional "Canhoto"

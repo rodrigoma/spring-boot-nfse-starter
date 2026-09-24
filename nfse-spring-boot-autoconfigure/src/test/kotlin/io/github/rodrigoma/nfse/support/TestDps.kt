@@ -62,6 +62,7 @@ import io.github.rodrigoma.nfse.model.dps.TaxRegime
 import io.github.rodrigoma.nfse.model.dps.Taxes
 import io.github.rodrigoma.nfse.model.dps.TemporaryGoodsMovement
 import io.github.rodrigoma.nfse.model.dps.TotalTaxes
+import org.springframework.core.io.FileSystemResource
 import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.OffsetDateTime
@@ -314,7 +315,7 @@ object TestDps {
         NfseProperties(
             certificate =
                 NfseProperties.Certificate(
-                    pfxPath = pfxPath,
+                    location = FileSystemResource(pfxPath),
                     password = TestCertificates.PASSWORD,
                     trustStorePath = trustStorePath,
                     trustStorePassword = trustStorePath?.let { TestCertificates.PASSWORD },

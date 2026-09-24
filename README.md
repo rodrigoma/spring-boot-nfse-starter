@@ -79,7 +79,7 @@ dependencies {
 nfse:
   environment: RESTRICTED_PRODUCTION          # default; PRODUCTION must be spelled out
   certificate:
-    pfx-path: /secrets/certificado-a1.pfx     # or pfx-base64
+    location: file:/secrets/certificado-a1.pfx    # or base64 / ssl-bundle — see "Where the certificate lives"
     password: ${NFSE_CERTIFICATE_PASSWORD}
   emitter:
     cnpj: 12.345.678/0001-95                  # or cpf
@@ -105,8 +105,10 @@ nfse:
 |---|---|---|---|---|
 | `nfse.enabled` | `Boolean` | `true` | No | `false` leaves the starter on the classpath without creating any bean |
 | `nfse.environment` | `Enum` | `RESTRICTED_PRODUCTION` | No | `RESTRICTED_PRODUCTION` (`tpAmb=2`, tests) or `PRODUCTION` (`tpAmb=1`) |
-| `nfse.certificate.pfx-path` | `String` | — | One of | Path to the PKCS#12 file of the emitter's A1 certificate |
-| `nfse.certificate.pfx-base64` | `String` | — | One of | The same file, Base64-encoded (e.g. from a secret manager) |
+| `nfse.certificate.location` | `Resource` | — | One of | The PKCS#12 file of the emitter's A1 certificate: `file:`, `classpath:`, or a plain path |
+| `nfse.certificate.base64` | `String` | — | One of | The same file, Base64-encoded; line breaks are tolerated |
+| `nfse.certificate.ssl-bundle` | `String` | — | One of | Name of a bundle declared under `spring.ssl.bundle.*`, which carries its own passwords |
+| `nfse.certificate.alias` | `String` | first key entry | No | Key entry to use when the PKCS#12 holds more than one |
 | `nfse.certificate.password` | `String` | `""` | Yes | PKCS#12 password. Never logged |
 | `nfse.certificate.trust-store-path` | `String` | JDK default | No | JKS/PKCS#12 trust store for the TLS connection (stubs, corporate proxies) |
 | `nfse.certificate.trust-store-password` | `String` | — | No | Password of that trust store |
@@ -131,10 +133,96 @@ nfse:
 | `nfse.danfse.enabled` | `Boolean` | `true` | No | With `nfse-spring-boot-danfse` on the classpath: render the DANFSe locally (`false` falls back to the ADN) |
 | `nfse.danfse.stub` | `Boolean` | `false` | No | Print the optional "Canhoto" (acknowledgement stub) at the bottom of the DANFSe |
 
-The context **fails to start** when a required property is missing, when the certificate cannot be opened (wrong
-password, corrupt file), is expired, is a CA certificate or lacks the *Digital Signature* / *Non Repudiation* key
-usages required by Anexo I. A certificate whose CNPJ base differs from `nfse.emitter.cnpj` logs a warning — the Sefin
-rejects such a DPS with E0718.
+The context **fails to start** when a required property is missing, when more than one certificate source is
+configured, or when the certificate cannot be opened (wrong password, corrupt file), is a CA certificate or lacks
+the *Digital Signature* / *Non Repudiation* key usages required by Anexo I. An **expired** certificate does not
+fail the context — see [Where the certificate lives](#where-the-certificate-lives). A certificate whose CNPJ base
+differs from `nfse.emitter.cnpj` logs a warning — the Sefin rejects such a DPS with E0718.
+
+### Where the certificate lives
+
+Where the `.pfx` sits changes from one environment to the next, and the library has no business choosing for you.
+Four sources are supported; **configuring more than one fails at startup**, naming both, instead of silently
+picking one.
+
+**A file on disk** — Kubernetes Secret mounted at a path, Docker secrets, systemd credentials, a plain VM, your
+laptop:
+
+```properties
+nfse.certificate.location=file:/etc/secrets/certificado.pfx
+nfse.certificate.password=${NFSE_CERT_PASSWORD}
+```
+
+`location` is a Spring `Resource`, so `classpath:certificado.pfx` works in tests and demos as well.
+
+**Environment variables only** — Heroku, Cloud Run, Fly, ECS, CI: anything twelve-factor with no persistent disk.
+
+```bash
+base64 -i certificado.pfx | tr -d '\n'     # macOS; on Linux, base64 -w0
+```
+
+```properties
+nfse.certificate.base64=${NFSE_CERT_BASE64}
+nfse.certificate.password=${NFSE_CERT_PASSWORD}
+```
+
+Line breaks in the value are fine — the decoder strips them, so a forgotten `-w0` does not turn into "Illegal
+base64 character". Two warnings: **never commit the `.pfx`** (it is the private key that signs in the company's
+name), and check the platform's limit for environment variables — Heroku allows 64 KB across all config vars of an
+app, and an A1 certificate in Base64 takes 4–11 KB of it.
+
+**A Spring Boot SSL bundle**, for applications that already declare their keystores that way:
+
+```yaml
+spring:
+  ssl:
+    bundle:
+      jks:
+        nfse:
+          keystore:
+            location: file:/etc/secrets/certificado.pfx
+            type: PKCS12
+            password: ${NFSE_CERT_PASSWORD}
+          key:
+            password: ${NFSE_CERT_PASSWORD}
+nfse:
+  certificate:
+    ssl-bundle: nfse
+```
+
+The bundle carries its own passwords and trust store, so `nfse.certificate.password` and
+`nfse.certificate.trust-store-path` are not used with it.
+
+**A vault** — HashiCorp Vault, AWS/GCP KMS, Secrets Manager, anything else. Publish an `NfseCertificateProvider`
+bean; it **wins over `nfse.certificate.*`**, which is then not read at all, and the library never learns about any
+vault:
+
+```kotlin
+@Bean
+fun nfseCertificateProvider(vault: VaultTemplate) =
+    NfseCertificateProvider {
+        val pkcs12: ByteArray = vault.read("secret/nfse")!!.data!!["pfx"] as ByteArray
+        NfseKeyStore.ofPkcs12(pkcs12, password)
+    }
+```
+
+Whatever the source, the PKCS#12 is opened from a stream and **never written to disk** — a temporary file would
+survive a crash, show up for anyone with a shell in the container, and buy nothing.
+
+### The certificate expires in a year
+
+An A1 certificate is valid for twelve months, and silence is the worst way to find out it lapsed — usually a
+customer reporting that no invoice came out. So:
+
+- the expiry date is logged at startup (`INFO`), at `WARN` when fewer than 30 days remain, and at `ERROR` once it
+  has passed;
+- `NfseCertificate.expiresAt` / `isUsable` expose it to your own code;
+- the health indicator reports `certificateExpiresAt`, and is **DOWN** for an expired certificate;
+- `emit` and `cancel` fail with `NfseException.Certificate` **before touching the network**, so no DPS number is
+  burned. Reading an NFS-e keeps working.
+
+The context, however, **still starts**. The application that consumes this library does much more than issue
+invoices, and taking it down entirely would trade a fiscal problem for an outage.
 
 ### Environments and services
 
@@ -156,7 +244,7 @@ Production is only reached with `PRODUCTION` spelled out (or explicit `base-url`
 | Bean name | Type | Purpose |
 |---|---|---|
 | `nfseClient` | `NfseClient` | The API you call; `nfseClient.municipalParameters` is the `MunicipalParametersClient` |
-| `nfseCertificate` | `NfseCertificate` | The loaded certificate: private key, chain, CNPJ/CPF read from the ICP-Brasil extension |
+| `nfseCertificate` | `NfseCertificate` | The loaded certificate: private key, chain, expiry, CNPJ/CPF read from the ICP-Brasil extension. An `NfseCertificateProvider` bean replaces the source |
 | `nfseRestClient` | `RestClient` | Sefin Nacional client with the mTLS request factory, JSON mapper and error handling |
 | `nfseHealthIndicator` | `HealthIndicator` | Only with `nfse.health-indicator-enabled=true` and Actuator on the classpath |
 
@@ -333,7 +421,7 @@ factory always uses the mTLS `SSLContext`); give it a self-signed certificate an
 # src/test/resources/application-test.yml
 nfse:
   certificate:
-    pfx-path: build/test-certificate.pfx          # generated by your test setup — never commit a real .pfx
+    location: file:build/test-certificate.pfx     # generated by your test setup — never commit a real .pfx
     password: changeit
     trust-store-path: build/stub-trust.p12
     trust-store-password: changeit

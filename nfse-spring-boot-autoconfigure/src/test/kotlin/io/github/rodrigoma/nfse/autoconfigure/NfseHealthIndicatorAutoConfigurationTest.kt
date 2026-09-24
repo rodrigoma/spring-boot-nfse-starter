@@ -1,5 +1,6 @@
 package io.github.rodrigoma.nfse.autoconfigure
 
+import io.github.rodrigoma.nfse.certificate.NfseCertificate
 import io.github.rodrigoma.nfse.exception.NfseException
 import io.github.rodrigoma.nfse.model.dps.DpsId
 import io.github.rodrigoma.nfse.model.dps.FederalId
@@ -40,7 +41,7 @@ class NfseHealthIndicatorAutoConfigurationTest {
                     NfseHealthIndicatorAutoConfiguration::class.java,
                 ),
             ).withPropertyValues(
-                "nfse.certificate.pfx-path=$pfx",
+                "nfse.certificate.location=file:$pfx",
                 "nfse.certificate.password=${TestCertificates.PASSWORD}",
                 "nfse.emitter.cnpj=${TestDps.CNPJ}",
                 "nfse.emitter.municipality-ibge=${TestDps.MUNICIPALITY}",
@@ -62,6 +63,7 @@ class NfseHealthIndicatorAutoConfigurationTest {
     private fun indicator(
         status: HttpStatus,
         failure: Throwable? = null,
+        certificate: NfseCertificate = valid,
     ): NfseHealthIndicator {
         val restClient =
             RestClient
@@ -74,7 +76,8 @@ class NfseHealthIndicatorAutoConfigurationTest {
                 }.defaultStatusHandler({ it.isError }) { _, _ ->
                     throw failure ?: NfseException.Unavailable("down", status.value())
                 }.build()
-        return NfseHealthIndicator(restClient, DpsId(TestDps.MUNICIPALITY, FederalId.Cnpj(TestDps.CNPJ), 1, 1))
+        val probe = DpsId(TestDps.MUNICIPALITY, FederalId.Cnpj(TestDps.CNPJ), 1, 1)
+        return NfseHealthIndicator(restClient, probe, certificate)
     }
 
     @Test
@@ -84,5 +87,31 @@ class NfseHealthIndicatorAutoConfigurationTest {
         val unauthorized = indicator(HttpStatus.FORBIDDEN, NfseException.Unauthorized(403, "no"))
         assertThat(unauthorized.health().status).isEqualTo(Status.OUT_OF_SERVICE)
         assertThat(indicator(HttpStatus.BAD_GATEWAY).health().status).isEqualTo(Status.DOWN)
+    }
+
+    @Test
+    fun `an expired certificate is DOWN without even calling the Sefin`() {
+        val expired =
+            NfseCertificate.load(TestCertificates.emitter(expired = true).pkcs12(), TestCertificates.PASSWORD)
+
+        val health = indicator(HttpStatus.OK, certificate = expired).health()
+
+        assertThat(health.status).isEqualTo(Status.DOWN)
+        assertThat(health.details).containsKey("certificateExpiresAt")
+        assertThat(health.details["certificate"].toString()).contains("expired on")
+    }
+
+    @Test
+    fun `a healthy certificate reports its expiry date`() {
+        val health = indicator(HttpStatus.OK).health()
+
+        assertThat(health.status).isEqualTo(Status.UP)
+        assertThat(health.details["certificateExpiresAt"]).isEqualTo(valid.expiresAt.toString())
+        assertThat(health.details).doesNotContainKey("certificateWarning")
+    }
+
+    private companion object {
+        val valid: NfseCertificate =
+            NfseCertificate.load(TestCertificates.emitter().pkcs12(), TestCertificates.PASSWORD)
     }
 }

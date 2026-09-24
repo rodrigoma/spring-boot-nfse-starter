@@ -42,7 +42,7 @@ class NfseAutoConfigurationTest {
 
     private fun required(pfxPath: Path = pfx) =
         arrayOf(
-            "nfse.certificate.pfx-path=$pfxPath",
+            "nfse.certificate.location=file:$pfxPath",
             "nfse.certificate.password=${TestCertificates.PASSWORD}",
             "nfse.emitter.cnpj=${TestDps.CNPJ}",
             "nfse.emitter.municipality-ibge=${TestDps.MUNICIPALITY}",
@@ -73,7 +73,7 @@ class NfseAutoConfigurationTest {
     fun `fails to start without the required properties`() {
         contextRunner.run { context ->
             assertThat(context).hasFailed()
-            assertThat(context.startupFailure).rootCause().hasMessageContaining("nfse.certificate")
+            assertThat(context.startupFailure).rootCause().hasMessageContaining("nfse.emitter.cnpj")
         }
     }
 

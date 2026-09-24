@@ -3,6 +3,7 @@ package io.github.rodrigoma.nfse.autoconfigure
 import com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL
 import com.fasterxml.jackson.annotation.JsonInclude.Value.construct
 import io.github.rodrigoma.nfse.certificate.NfseCertificate
+import io.github.rodrigoma.nfse.certificate.NfseCertificateProvider
 import io.github.rodrigoma.nfse.certificate.NfseSslContextFactory
 import io.github.rodrigoma.nfse.client.DanfsePdfRenderer
 import io.github.rodrigoma.nfse.client.DefaultNfseClient
@@ -16,6 +17,7 @@ import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
+import org.springframework.boot.ssl.SslBundles
 import org.springframework.context.annotation.Bean
 import org.springframework.http.client.JdkClientHttpRequestFactory
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter
@@ -43,10 +45,20 @@ class NfseAutoConfiguration(
             .changeDefaultPropertyInclusion { construct(NON_NULL, NON_NULL) }
             .build()
 
-    /** Loads and checks the certificate once; a bad certificate fails the context with a clear message. */
+    /**
+     * Loads and checks the certificate once. The wrong file fails the context; an **expired** one does not — it is
+     * logged at `ERROR`, reported by the health indicator and refused when a DPS is signed, so the rest of the
+     * application stays up. An [NfseCertificateProvider] bean (Vault, KMS, Secrets Manager) wins over
+     * `nfse.certificate.*`, which is then not read at all.
+     */
     @Bean
-    fun nfseCertificate(): NfseCertificate {
-        val certificate = NfseCertificate.load(properties.certificate)
+    fun nfseCertificate(
+        sslBundles: ObjectProvider<SslBundles>,
+        provider: ObjectProvider<NfseCertificateProvider>,
+    ): NfseCertificate {
+        val certificate =
+            provider.ifAvailable?.let { NfseCertificate.load(it.provide()) }
+                ?: NfseCertificate.load(properties.certificate, sslBundles.ifAvailable)
         val configured = properties.emitterFederalId()
         val inCertificate = certificate.federalId
         if (inCertificate != null && !sameHolder(configured, inCertificate)) {
@@ -57,14 +69,35 @@ class NfseAutoConfiguration(
                 configured,
             )
         }
-        log.info("NFS-e certificate loaded: {} ({} environment)", certificate, properties.environment)
+        log.info(
+            "NFS-e certificate loaded from {}: {} ({} environment)",
+            certificate.source,
+            certificate,
+            properties.environment,
+        )
+        warnAboutExpiry(certificate)
         return certificate
+    }
+
+    /** Silence is the worst failure mode for a yearly certificate: say it loudly before the notes stop. */
+    private fun warnAboutExpiry(certificate: NfseCertificate) {
+        when {
+            certificate.unusableReason != null ->
+                log.error("{} — emission will be refused until the certificate is replaced", certificate.unusableReason)
+            certificate.expiresWithin(NfseCertificate.EXPIRY_WARNING) ->
+                log.warn(
+                    "The NFS-e certificate expires on {}, in less than {} days — replace it before emission stops",
+                    certificate.expiresAt,
+                    NfseCertificate.EXPIRY_WARNING.toDays(),
+                )
+        }
     }
 
     @Bean(name = ["nfseRestClient"])
     fun nfseRestClient(
         certificate: NfseCertificate,
         customizers: ObjectProvider<NfseRestClientCustomizer>,
+        sslBundles: ObjectProvider<SslBundles>,
     ): RestClient {
         val errorHandler = NfseErrorHandler(objectMapper)
         // The Sefin Nacional refuses HTTP/2 on authenticated paths (HTTP_1_1_REQUIRED); never negotiate h2.
@@ -72,7 +105,7 @@ class NfseAutoConfiguration(
             HttpClient
                 .newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
-                .sslContext(NfseSslContextFactory.create(certificate, properties.certificate))
+                .sslContext(NfseSslContextFactory.create(certificate, properties.certificate, sslBundles.ifAvailable))
                 .connectTimeout(properties.connectTimeout)
                 .build()
         val requestFactory = JdkClientHttpRequestFactory(httpClient).apply { setReadTimeout(properties.readTimeout) }

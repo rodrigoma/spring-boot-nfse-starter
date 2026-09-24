@@ -26,3 +26,50 @@ tasks.named<Jar>("jar") {
         attributes("Implementation-Title" to project.name, "Implementation-Version" to project.version)
     }
 }
+
+// A PKCS#12 minted by the build for the `classpath:` and `spring.ssl.bundle.*` tests — never a real certificate,
+// and never committed. keytool ships with the JDK, so nothing else is needed to produce it.
+val generatedTestCertificates = layout.buildDirectory.dir("generated-test-resources")
+
+val generateTestCertificate by tasks.registering {
+    val output = generatedTestCertificates.map { it.file("certificate/emitter.pfx") }
+    outputs.file(output)
+    doLast {
+        val file = output.get().asFile
+        file.parentFile.mkdirs()
+        file.delete()
+        providers
+            .exec {
+                commandLine(
+                    "${System.getProperty("java.home")}/bin/keytool",
+                    "-genkeypair",
+                    "-alias",
+                    "emitter",
+                    "-keyalg",
+                    "RSA",
+                    "-keysize",
+                    "2048",
+                    "-storetype",
+                    "PKCS12",
+                    "-storepass",
+                    "changeit",
+                    "-keypass",
+                    "changeit",
+                    "-validity",
+                    "365",
+                    "-dname",
+                    "CN=EMPRESA TESTE:12345678000195,O=ICP-Brasil,C=BR",
+                    "-ext",
+                    "KeyUsage=digitalSignature,nonRepudiation",
+                    "-ext",
+                    "BasicConstraints=ca:false",
+                    "-keystore",
+                    file.absolutePath,
+                )
+            }.result
+            .get()
+    }
+}
+
+sourceSets.test { resources.srcDir(generatedTestCertificates) }
+tasks.named("processTestResources") { dependsOn(generateTestCertificate) }

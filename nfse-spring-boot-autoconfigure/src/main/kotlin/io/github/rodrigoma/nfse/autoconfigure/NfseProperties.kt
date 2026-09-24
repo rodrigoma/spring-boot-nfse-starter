@@ -12,6 +12,7 @@ import io.github.rodrigoma.nfse.model.dps.SpecialTaxRegime
 import io.github.rodrigoma.nfse.model.dps.TaxRegime
 import org.springframework.beans.factory.InitializingBean
 import org.springframework.boot.context.properties.ConfigurationProperties
+import org.springframework.core.io.Resource
 import java.net.URI
 import java.time.Duration
 
@@ -35,18 +36,41 @@ data class NfseProperties(
     val readTimeout: Duration = Duration.ofSeconds(DEFAULT_READ_TIMEOUT_SECONDS),
     val baseUrl: BaseUrl = BaseUrl(),
 ) : InitializingBean {
-    /** `nfse.certificate.*` — the A1 (PKCS#12) certificate. Exactly one of [pfxPath] / [pfxBase64]. */
+    /**
+     * `nfse.certificate.*` — the emitter's A1 (PKCS#12) certificate. At most one of [sslBundle], [location] and
+     * [base64]; a bean of `NfseCertificateProvider` wins over all of them (Vault, KMS, Secrets Manager).
+     */
     data class Certificate(
-        val pfxPath: String? = null,
-        val pfxBase64: String? = null,
+        /** Name of a bundle declared under `spring.ssl.bundle.*`, which carries its own passwords. */
+        val sslBundle: String? = null,
+        /** The PKCS#12 file: `file:/etc/secrets/certificado.pfx`, `classpath:…`, or a plain path. */
+        val location: Resource? = null,
+        /** The same file, Base64-encoded; line breaks are tolerated. */
+        val base64: String? = null,
+        /** PKCS#12 password. Not used with [sslBundle], which carries its own. */
         val password: String = "",
+        /** Key entry to use when the file holds more than one; the first private-key entry by default. */
+        val alias: String? = null,
         /** Optional trust store (JKS or PKCS#12) replacing the JDK default — for stubs and corporate proxies. */
         val trustStorePath: String? = null,
         val trustStorePassword: String? = null,
     ) {
+        /** The configured sources, by property name. More than one is a startup error; see `NfseCertificate.load`. */
+        val configuredSources: List<String>
+            get() =
+                listOfNotNull(
+                    sslBundle?.let { "$PREFIX.ssl-bundle" },
+                    location?.let { "$PREFIX.location" },
+                    base64?.let { "$PREFIX.base64" },
+                )
+
         override fun toString(): String =
-            "Certificate(pfxPath=$pfxPath, pfxBase64=${pfxBase64?.let { "<hidden>" }}, password=<hidden>, " +
-                "trustStorePath=$trustStorePath, trustStorePassword=<hidden>)"
+            "Certificate(sslBundle=$sslBundle, location=$location, base64=${base64?.let { "<hidden>" }}, " +
+                "password=<hidden>, alias=$alias, trustStorePath=$trustStorePath, trustStorePassword=<hidden>)"
+
+        companion object {
+            const val PREFIX = "nfse.certificate"
+        }
     }
 
     /** `nfse.emitter.*` — the service provider that issues the DPS. */
@@ -146,9 +170,8 @@ data class NfseProperties(
         }
 
     override fun afterPropertiesSet() {
-        require((certificate.pfxPath != null) xor (certificate.pfxBase64 != null)) {
-            "Set exactly one of nfse.certificate.pfx-path and nfse.certificate.pfx-base64"
-        }
+        // The certificate sources are validated where the certificate is loaded: only there is it known whether the
+        // application published an NfseCertificateProvider bean, which wins over these properties.
         require((emitter.cnpj != null) xor (emitter.cpf != null)) {
             "Set exactly one of nfse.emitter.cnpj and nfse.emitter.cpf"
         }

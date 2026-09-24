@@ -59,7 +59,7 @@ class NfseClientIntegrationTest {
             ApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(NfseAutoConfiguration::class.java))
                 .withPropertyValues(
-                    "nfse.certificate.pfx-path=$pfx",
+                    "nfse.certificate.location=file:$pfx",
                     "nfse.certificate.password=${TestCertificates.PASSWORD}",
                     "nfse.certificate.trust-store-path=${stub.trustStoreFile()}",
                     "nfse.certificate.trust-store-password=${TestCertificates.PASSWORD}",
@@ -113,6 +113,30 @@ class NfseClientIntegrationTest {
                 "alertas" to listOf(mapOf("codigo" to "A0001", "descricao" to "Alerta de teste", "complemento" to "x")),
             ),
         )
+
+    @Test
+    fun `starts with an expired certificate but refuses to sign, before any request`() {
+        val expired = TestCertificates.emitter(expired = true)
+        val expiredPfx = Files.createTempFile("expired", ".pfx").also { Files.write(it, expired.pkcs12()) }
+
+        contextRunner
+            .withPropertyValues("nfse.certificate.location=file:$expiredPfx")
+            .run { context ->
+                assertThat(context).hasNotFailed()
+                val client = context.getBean(NfseClient::class.java)
+
+                assertThatThrownBy { client.emit(request) }
+                    .isInstanceOf(NfseException.Certificate::class.java)
+                    .hasMessageContaining("expired on")
+                    .hasMessageContaining("cannot be signed")
+                assertThatThrownBy { client.cancel(accessKey, CancellationReason.ISSUANCE_ERROR, "Erro na emissão") }
+                    .isInstanceOf(NfseException.Certificate::class.java)
+                // The refusal happens locally: the DPS number is not burned and nothing reaches the Sefin. Reading
+                // an NFS-e has no such guard, so it keeps working while the certificate is being replaced.
+                assertThat(stub.requests).isEmpty()
+            }
+        Files.deleteIfExists(expiredPfx)
+    }
 
     @Test
     fun `emits a DPS - signed, compressed and encoded - and maps the NFS-e back`() {
