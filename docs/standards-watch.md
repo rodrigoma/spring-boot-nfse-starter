@@ -54,4 +54,5 @@ What to do with the outcome:
 
 | Date | Outcome | Next check |
 |---|---|---|
+| 2026-09-29 | OpenAPI of the four services fetched from restricted production with the emitter's own certificate: ADN Contribuintes and ADN Parâmetros Municipais identical to the 2026-04-16 capture, Sefin different only in generated examples and two corrected summaries, ADN DANFSe 404 (suspended by NT 008). The HTTP contract of the library is confirmed first-hand; `docs/specs/sefin-nacional.openapi.json` refreshed. | **~2026-10-05** (right after the 2026-10-01 IBS/CBS wave), then monthly. |
 | 2026-09-20 | Baseline, established from the official pages and the open-nfse standards watch of 2026-08-24: bundle 2026-07-27 adopted; IBS/CBS highlighting wave of 2026-10-01 ahead; NT 008 DANFSe suspended; NT 009 without schedule. | **~2026-10-05** (right after the 2026-10-01 IBS/CBS wave), then monthly. |
