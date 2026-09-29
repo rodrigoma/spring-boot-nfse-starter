@@ -10,6 +10,15 @@ environment (the Swagger UIs are only reachable with an ICP-Brasil certificate):
 | `adn-danfse.openapi.json` | ADN DANFSe — PDF | `https://adn.producaorestrita.nfse.gov.br/danfse` |
 | `adn-parametrizacao.openapi.json` | ADN Parâmetros Municipais | `https://adn.producaorestrita.nfse.gov.br/parametrizacao` |
 
-Provenance: captured on 2026-04-16 by the [open-nfse](https://github.com/Fm-s/open-nfse) project
-(MIT License, © 2026 Mergen Soluções Tecnológicas LTDA) and copied here unchanged as reference material.
-They are not shipped in the jar. Refresh them with `scripts/fetch-swagger.sh` once you have a certificate.
+Provenance: first captured on 2026-04-16 by the [open-nfse](https://github.com/Fm-s/open-nfse) project
+(MIT License, © 2026 Mergen Soluções Tecnológicas LTDA), then **verified on 2026-09-29 against restricted
+production with this project's own ICP-Brasil certificate** (`scripts/fetch-swagger.sh`). The ADN documents came
+back byte for byte identical; the Sefin one, refreshed here, differs only in the `dataHoraProcessamento` examples
+(generated per request) and in two `summary` strings the Receita has since corrected — the events `POST` and `GET`
+described the emission endpoint by mistake. **No part of the contract changed**, so every field name, path and
+error shape the library assumes is confirmed first-hand.
+
+`adn-danfse.openapi.json` could not be refreshed: `…/danfse/docs/index.html` answers 404, consistent with the
+service NT 008/2026 suspended on 2026-08-03. The file is kept as the record of what it looked like.
+
+The specs are not shipped in the jar. Refresh them with `scripts/fetch-swagger.sh /path/to/certificado.pfx`.
