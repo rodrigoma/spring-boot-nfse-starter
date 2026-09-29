@@ -82,7 +82,7 @@ internal class DefaultMunicipalParametersClient(
     ): String =
         trimStart('/')
             .replace("{codigoMunicipio}", municipalityIbge.toString())
-            .replace("{codigoServico}", serviceCode.orEmpty())
+            .replace("{codigoServico}", serviceCode?.let { ServiceCodes.complete(it) }.orEmpty())
             .replace("{numeroBeneficio}", benefit.orEmpty())
             .replace("{competencia}", competence?.iso().orEmpty())
 

@@ -422,15 +422,16 @@ class NfseClientIntegrationTest {
             200,
             """{"mensagem":null,"parametrosConvenio":{"aderenteAmbienteNacional":1}}""",
         )
-        stub.stub("GET", "$base/010701/2026-09-01/aliquota", 200, """{"aliquotas":{"010701":[{"Aliq":2.0}]}}""")
-        stub.stub("GET", "$base/010701/historicoaliquotas", 200, """{"aliquotas":{}}""")
+        val rateJson = """{"aliquotas":{"01.09.02.001":[{"Incidencia":"SIM","Aliq":2.0}]}}"""
+        stub.stub("GET", "$base/01.09.02.001/2026-09-01/aliquota", 200, rateJson)
+        stub.stub("GET", "$base/01.09.02.001/historicoaliquotas", 200, """{"aliquotas":{}}""")
         stub.stub(
             "GET",
             "$base/11111111111111/2026-09-01/beneficio",
             404,
             """{"mensagem":"Benefício não encontrado"}""",
         )
-        stub.stub("GET", "$base/010701/2026-09-01/regimes_especiais", 200, """{"regimesEspeciais":{}}""")
+        stub.stub("GET", "$base/01.09.02.001/2026-09-01/regimes_especiais", 200, """{"regimesEspeciais":{}}""")
         val withholdingsJson = """{"mensagem":"ok","retencoes":{"artigoSexto":{"habilitado":false}}}"""
         stub.stub("GET", "$base/2026-09-01/retencoes", 200, withholdingsJson)
         val competence = LocalDate.of(2026, 9, 1)
@@ -439,15 +440,20 @@ class NfseClientIntegrationTest {
             val agreement = parameters.agreement(3548807)
             assertThat(agreement.serviceCode).isNull()
             assertThat(agreement.raw["parametrosConvenio"]).isEqualTo(mapOf("aderenteAmbienteNacional" to 1))
-            val rates = parameters.rates(3548807, "010701", competence)
-            assertThat(rates.serviceCode).isEqualTo("010701")
+            // The service takes the complete code; the client normalises the undotted spelling into it.
+            val rates = parameters.rates(3548807, "01.09.02.001", competence)
+            assertThat(rates.serviceCode).isEqualTo("01.09.02.001")
             assertThat(rates.competence).isEqualTo(competence)
             assertThat(rates.raw).containsKey("aliquotas")
-            assertThat(parameters.rateHistory(3548807, "010701").raw).containsKey("aliquotas")
+            assertThat(parameters.rateHistory(3548807, "010902001").raw).containsKey("aliquotas")
+            assertThatThrownBy { parameters.rates(3548807, "010902", competence) }
+                .isInstanceOf(IllegalArgumentException::class.java)
+                .hasMessageContaining("01.09.02.001")
             assertThatThrownBy { parameters.benefit(3548807, "11111111111111", competence) }
                 .isInstanceOf(NfseException.NotFound::class.java)
                 .hasMessageContaining("Benefício não encontrado")
-            assertThat(parameters.specialRegimes(3548807, "010701", competence).raw).containsKey("regimesEspeciais")
+            assertThat(parameters.specialRegimes(3548807, "01.09.02.001", competence).raw)
+                .containsKey("regimesEspeciais")
             val withholdings = parameters.withholdings(3548807, competence)
             assertThat(withholdings.message).isEqualTo("ok")
             assertThat(withholdings.raw).containsKey("retencoes")
