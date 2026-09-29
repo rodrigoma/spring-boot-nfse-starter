@@ -25,4 +25,15 @@ object NfseApiPaths {
     /** Paths under the ADN Contribuintes base URL. */
     const val ADN_EVENTS = "/NFSe/{chaveAcesso}/Eventos"
     const val ADN_DISTRIBUTION = "/DFe/{nsu}"
+
+    /**
+     * Paths under the ADN Parâmetros Municipais base URL — the six `GET` queries of the service. Its other three
+     * paths are `POST`s for a municipality to change its own parameters, which is not an emitter's job.
+     */
+    const val PARAM_AGREEMENT = "/{codigoMunicipio}/convenio"
+    const val PARAM_RATES = "/{codigoMunicipio}/{codigoServico}/{competencia}/aliquota"
+    const val PARAM_RATE_HISTORY = "/{codigoMunicipio}/{codigoServico}/historicoaliquotas"
+    const val PARAM_BENEFIT = "/{codigoMunicipio}/{numeroBeneficio}/{competencia}/beneficio"
+    const val PARAM_SPECIAL_REGIMES = "/{codigoMunicipio}/{codigoServico}/{competencia}/regimes_especiais"
+    const val PARAM_WITHHOLDINGS = "/{codigoMunicipio}/{competencia}/retencoes"
 }

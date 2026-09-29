@@ -23,6 +23,7 @@ returns), **Sefin Nacional** (emission host), **ADN** (distribution host), **NSU
 ./gradlew :nfse-spring-boot-autoconfigure:test --tests '*DpsXmlBuilderTest*'
 ./gradlew :nfse-spring-boot-danfse:renderSamples   # fixtures → build/danfse/*.pdf for a visual check of the DANFSe
 ./gradlew :nfse-spring-boot-sample:bootRun --args='--spring.profiles.active=local'   # sandbox, no certificate
+scripts/fetch-swagger.sh [--update] /path/to/certificado.pfx   # fetch the OpenAPI docs and diff against docs/specs/
 ```
 
 JDK 21 is required (`JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home` on the maintainer's Mac).
@@ -90,6 +91,13 @@ docs/superpowers/specs/           design notes
   a yearly certificate would trade a fiscal problem for an outage.
 - **Validate before consuming a number.** `emit` runs `DpsPreflight` (check digits) and the XSD before anything
   touches the wire — applications should take the DPS number only after `emit` returns or fails with `Rejected`.
+
+- **`docs/specs/` is checked, not decorative.** `ApiSpecConformanceTest` asserts that every `NfseApiPaths` entry
+  exists in the committed OpenAPI documents, that every field bound by `ApiPayloads` is declared there, and that
+  the fields the client ignores are exactly the known list — so a refreshed spec turns a change on the
+  government's side into a red build. The specs are a declared input of the test task; keep it that way, or
+  refreshing them leaves the task up to date and silent. Fetching them needs the certificate (mutual TLS), so
+  that half stays manual: `scripts/fetch-swagger.sh`.
 
 ## Quality gates
 
