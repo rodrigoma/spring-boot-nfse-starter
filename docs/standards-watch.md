@@ -44,10 +44,26 @@ Questions to answer:
 5. Is the **DANFSe** service back, or is the DANFSe v2.0 layout final?
 6. Is there a newer XSD zip on either documentation page? Diff it against `resources/META-INF/nfse/xsd/1.01/`.
 
+Then check the **HTTP contract**, which the pages above never mention (it moves silently, and only when the change
+is already in production — the Notas Técnicas are the early warning, this is the confirmation):
+
+```
+scripts/fetch-swagger.sh /path/to/certificado.pfx      # asks the password, fetches and diffs against docs/specs/
+scripts/fetch-swagger.sh --update /path/to/certif.pfx  # …and refreshes docs/specs/ when something moved
+./gradlew test                                          # ApiSpecConformanceTest: does the client still match?
+```
+
+The Swagger is behind mutual TLS, so this step cannot run unattended in CI; it needs the certificate and a human
+to type its password. What *is* automated is the other direction: `ApiSpecConformanceTest` fails the build when
+the client and the committed specs disagree, so refreshing the specs is enough to turn a change on the
+government's side into a red build.
+
 What to do with the outcome:
 
 - **New XSDs** → follow "When the standard moves" in `CLAUDE.md` (embed verbatim, walk the type diff, bump MINOR).
 - **Schedule only** → update this file and the README radar.
+- **Contract changed** → refresh `docs/specs/` with `--update`, let `ApiSpecConformanceTest` show what broke,
+  then fix `ApiPayloads` / `NfseApiPaths` / `AdnClient`.
 - **Nothing** → record the check below with the next suggested date.
 
 ## Check history

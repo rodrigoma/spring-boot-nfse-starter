@@ -1,14 +1,21 @@
 #!/usr/bin/env bash
 # Downloads the OpenAPI specs of the Sistema Nacional NFS-e (restricted production) with the emitter's A1
-# certificate and prints the pieces the library assumes (see README → "Notes on the official docs").
+# certificate, compares them with the documents committed under docs/specs/ and says whether the contract moved.
 #
-#   scripts/fetch-swagger.sh /path/to/certificado.pfx [output-dir]
+#   scripts/fetch-swagger.sh [--update] /path/to/certificado.pfx [output-dir]
 #
-# The password is asked interactively and never written to disk or to the shell history.
+#   --update   refresh docs/specs/ with what came back. Then run `./gradlew test`: ApiSpecConformanceTest
+#              compares the client with those files and fails if the client no longer matches them.
+#
+# The password is asked once, interactively, and is never written to disk or to the shell history.
 set -euo pipefail
 
-PFX="${1:?usage: $0 /path/to/certificado.pfx [output-dir]}"
-OUT="${2:-docs/swagger}"
+UPDATE=false
+if [ "${1:-}" = "--update" ]; then UPDATE=true; shift; fi
+
+PFX="${1:?usage: $0 [--update] /path/to/certificado.pfx [output-dir]}"
+OUT="${2:-$(mktemp -d "${TMPDIR:-/tmp}/nfse-swagger.XXXXXX")}"
+SPECS="$(cd "$(dirname "$0")/.." && pwd)/docs/specs"
 mkdir -p "$OUT"
 read -r -s -p "Password of $PFX: " PFX_PASS; echo
 
@@ -67,20 +74,8 @@ for entry in $DOCS; do
 done
 
 echo
-echo "== Things the library assumes — compare with the specs above:"
-for f in "$OUT"/*.json; do
-  [ -f "$f" ] || continue
-  echo "-- $f"
-  python3 - "$f" <<'PY'
-import json, sys
-spec = json.load(open(sys.argv[1]))
-print("   paths:", ", ".join(sorted(spec.get("paths", {}))))
-schemas = spec.get("components", {}).get("schemas", {}) or spec.get("definitions", {})
-for name, schema in schemas.items():
-    props = list((schema.get("properties") or {}).keys())
-    if props:
-        print(f"   {name}: {', '.join(props)}")
-PY
-done
+echo "== Contract check against docs/specs/"
+python3 "$(dirname "$0")/compare-specs.py" "$OUT" "$SPECS" "$UPDATE"
+
 echo
-echo "Send the $OUT/*.json files (they contain no secrets) so the field names can be confirmed."
+echo "Fetched documents are in $OUT"

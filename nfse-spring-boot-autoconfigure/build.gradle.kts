@@ -20,6 +20,18 @@ dependencies {
     testImplementation("org.bouncycastle:bcpkix-jdk18on:1.80")
 }
 
+// ApiSpecConformanceTest compares the client with the OpenAPI documents kept at the repository root. They are
+// declared as an input so that refreshing a spec re-runs the tests instead of leaving the task up to date —
+// without this, `scripts/fetch-swagger.sh --update` would change the contract and the build would say nothing.
+tasks.named<Test>("test") {
+    val specs = rootProject.file("docs/specs")
+    systemProperty("nfse.specs.dir", specs.absolutePath)
+    inputs
+        .dir(specs)
+        .withPropertyName("apiSpecs")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+}
+
 // The default `verAplic` (nfse.application-version) is read from this manifest entry at runtime
 tasks.named<Jar>("jar") {
     manifest {
