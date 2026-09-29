@@ -322,13 +322,22 @@ nfse.accessKeyOf(dpsId)                              // GET /dps/{id}, null when
 
 // Municipal parameters (ADN Parâmetros Municipais)
 val params = nfse.municipalParameters
-params.agreement(3550308)                            // /{mun}/convenio
-params.rates(3550308, "010701", LocalDate.now())     // /{mun}/{servico}/{competencia}/aliquota
-params.rateHistory(3550308, "010701")
+params.agreement(3550308)                                // /{mun}/convenio
+params.rates(3550308, "01.09.02.001", LocalDate.now())   // /{mun}/{servico}/{competencia}/aliquota
+params.rateHistory(3550308, "010902001")                 // either spelling; both are normalised
 params.benefit(3550308, "12345678901234", LocalDate.now())
-params.specialRegimes(3550308, "010701", LocalDate.now())
-params.withholdings(3550308, LocalDate.now())        // each returns MunicipalParameters(message, raw)
+params.specialRegimes(3550308, "01.09.02.001", LocalDate.now())
+params.withholdings(3550308, LocalDate.now())            // each returns MunicipalParameters(message, raw)
 ```
+
+The `serviceCode` of this service is **not** the `cTribNac` that goes in the DPS. It is the *complete* code: the
+six digits of `cTribNac` plus the three of the municipal complement (`cTribMun`), written with separators —
+`01.09.02.001`. The Emissor Nacional shows the two fields side by side, "Código de Tributação Nacional" and
+"Código Complementar Municipal". Passing the six digits alone is answered with HTTP 400 and *"Chamada mal
+formada. O código do serviço deve ser composto por nove dígitos"*, which counts **digits**, not characters — the
+separators are part of the expected form. The library accepts either spelling, normalises it, and refuses an
+impossible code before the request with a message that says so.
+
 
 ### Distribution by NSU (what was issued to or by you)
 
