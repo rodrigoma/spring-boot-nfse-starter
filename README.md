@@ -277,6 +277,19 @@ The API is split across **two hosts with different wire formats** — the Sefin 
 Production is only reached with `PRODUCTION` spelled out (or explicit `base-url`s). The client always speaks
 **HTTP/1.1** — the Sefin refuses HTTP/2 on authenticated paths.
 
+The same two environments have a web front end, the **Emissor Nacional**, which you sign into with the same
+certificate:
+
+| | |
+|---|---|
+| Production | <https://www.nfse.gov.br/EmissorNacional/Login> |
+| Restricted production | <https://www.producaorestrita.nfse.gov.br/EmissorNacional/Login> |
+
+Worth knowing about, for two things the API does not give you. It is where the **list of service codes** lives —
+the `cTribNac` and the municipal complement are picked from a list filtered by your municipality, and there is no
+endpoint that returns it. And it is the **control experiment** when the Sefin rejects a DPS: if the government's
+own emitter fails the same way for the same CNPJ, the problem is not your integration.
+
 ## Auto-configured beans
 
 | Bean name | Type | Purpose |
