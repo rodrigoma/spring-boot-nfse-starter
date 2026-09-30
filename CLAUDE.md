@@ -89,6 +89,11 @@ docs/superpowers/specs/           design notes
   mean the wrong file. Expiry is logged, exposed (`expiresAt`, `isUsable`), reported DOWN by the health indicator
   and enforced by `requireUsable()` in `emit`/`cancel`; reads keep working. Taking the whole application down over
   a yearly certificate would trade a fiscal problem for an outage.
+- **A configured trust store extends the JDK's roots, never replaces them.** `NfseSslContextFactory.trustManagers`
+  composes the configured managers with the defaults and accepts what any of them accepts. The Sefin's TLS chain is
+  anchored on **GlobalSign Root R46**, missing from several JDK builds (21 ships R3/R4/R5/R6), so `PKIX path
+  building failed` against a correct configuration is the expected first failure — `trustStoreHint` turns it into
+  a message that names the root and the property.
 - **Validate before consuming a number.** `emit` runs `DpsPreflight` (check digits) and the XSD before anything
   touches the wire — applications should take the DPS number only after `emit` returns or fails with `Rejected`.
 

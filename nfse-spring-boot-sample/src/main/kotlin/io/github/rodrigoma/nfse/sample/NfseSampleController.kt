@@ -42,6 +42,8 @@ class NfseSampleController(
         val takerDocument: String,
         val takerName: String,
         val nationalTaxCode: String,
+        /** `cTribMun`, when the municipality requires the complementary code. */
+        val municipalTaxCode: String? = null,
         val description: String,
         val amount: BigDecimal,
         val rate: BigDecimal? = null,
@@ -61,7 +63,12 @@ class NfseSampleController(
                 number = nextNumber.getAndIncrement(),
                 competenceDate = LocalDate.now(),
                 taker = Person(id = FederalId.cnpjOrCpf(demo.takerDocument), name = demo.takerName),
-                service = ServiceRequest(nationalTaxCode = demo.nationalTaxCode, description = demo.description),
+                service =
+                    ServiceRequest(
+                        nationalTaxCode = demo.nationalTaxCode,
+                        municipalTaxCode = demo.municipalTaxCode,
+                        description = demo.description,
+                    ),
                 amounts =
                     Amounts(
                         serviceAmount = demo.amount,

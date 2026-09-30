@@ -3,16 +3,38 @@ package io.github.rodrigoma.nfse.client
 import io.github.rodrigoma.nfse.exception.NfseException
 import org.springframework.web.client.ResourceAccessException
 import org.springframework.web.client.RestClientException
+import java.security.cert.CertPathBuilderException
+import java.security.cert.CertPathValidatorException
 
 /** Runs a call, turning transport failures into [NfseException.Unavailable]; [NfseException]s pass through. */
 internal inline fun <T> nfseCall(call: () -> T): T =
     try {
         call()
     } catch (e: ResourceAccessException) {
-        throw NfseException.Unavailable("Cannot reach the NFS-e service: ${e.message}", cause = e)
+        throw NfseException.Unavailable("Cannot reach the NFS-e service: ${e.message}${trustStoreHint(e)}", cause = e)
     } catch (e: RestClientException) {
         throw (e.cause as? NfseException) ?: NfseException.Unavailable("NFS-e call failed: ${e.message}", cause = e)
     }
+
+/**
+ * "PKIX path building failed" says nothing about what to do. The TLS chain of the Sefin and the ADN is anchored on
+ * **GlobalSign Root R46**, which several JDK builds do not carry (JDK 21 ships R3, R4, R5 and R6), so a correct
+ * configuration fails on a trust store that is simply missing one root. Point at the fix instead of the symptom.
+ */
+@PublishedApi
+internal fun trustStoreHint(failure: Throwable): String {
+    var cause: Throwable? = failure
+    while (cause != null) {
+        if (cause is CertPathBuilderException || cause is CertPathValidatorException) {
+            return " — the JVM does not trust the server's certificate chain. The Sefin and the ADN are issued " +
+                "under GlobalSign Root R46, which some JDK builds do not carry; add that root to your trust " +
+                "store and set nfse.certificate.trust-store-path (it is merged with the JDK's own roots, not a " +
+                "replacement). See the README, 'Trusting the government's certificate chain'."
+        }
+        cause = cause.cause.takeIf { it !== cause }
+    }
+    return ""
+}
 
 /** Paths under the Sefin Nacional base URL. */
 object NfseApiPaths {
