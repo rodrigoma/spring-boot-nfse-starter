@@ -591,9 +591,22 @@ success, `OUT_OF_SERVICE` when the certificate is refused, `DOWN` otherwise.
 
 ## Notes on the official docs
 
-The HTTP contract follows the OpenAPI documents of the four services captured from the restricted-production
-Swagger UIs (2026-04-16), kept under [`docs/specs/`](docs/specs/README.md) — they settle what the manuals leave
-open. `scripts/fetch-swagger.sh /path/to/certificado.pfx` refreshes them with your certificate. Points worth knowing:
+The HTTP contract follows the OpenAPI documents of the four services, kept under
+[`docs/specs/`](docs/specs/README.md) — they settle what the manuals leave open, and
+`ApiSpecConformanceTest` holds the client to them on every build.
+
+Each service publishes its own documentation page, all **behind mutual TLS**: without an ICP-Brasil certificate
+the Sefin answers 403 and the ADN drops the handshake, so these are of no use unless you already have one.
+
+| Service | Documentation (restricted production) |
+|---|---|
+| Sefin Nacional | <https://sefin.producaorestrita.nfse.gov.br/API/SefinNacional/docs/index> |
+| ADN Contribuintes | <https://adn.producaorestrita.nfse.gov.br/contribuintes/docs/index.html> |
+| ADN Parâmetros Municipais | <https://adn.producaorestrita.nfse.gov.br/parametrizacao/docs/index.html> |
+
+`scripts/fetch-swagger.sh /path/to/certificado.pfx` fetches all of them, diffs the result against `docs/specs/`
+and says whether the contract moved; `--update` refreshes the files. Everyone else can read the copies in this
+repository, which is why they are committed. Points worth knowing:
 
 - **JSON shapes.** `POST /nfse` → `NFSePostResponseSucesso` (`idDps`, `chaveAcesso`, `nfseXmlGZipB64`, `alertas[]`)
   or 400 `NFSePostResponseErro` (`erros[]` of `codigo`/`descricao`/`complemento`). Every other Sefin endpoint
