@@ -110,7 +110,7 @@ nfse:
 | `nfse.certificate.ssl-bundle` | `String` | — | One of | Name of a bundle declared under `spring.ssl.bundle.*`, which carries its own passwords |
 | `nfse.certificate.alias` | `String` | first key entry | No | Key entry to use when the PKCS#12 holds more than one |
 | `nfse.certificate.password` | `String` | `""` | Yes | PKCS#12 password. Never logged |
-| `nfse.certificate.trust-store-path` | `String` | JDK default | No | JKS/PKCS#12 trust store for the TLS connection (stubs, corporate proxies) |
+| `nfse.certificate.trust-store-path` | `String` | — | Often | JKS/PKCS#12 trust store **added to** the JDK's roots — see [Trusting the government's certificate chain](#trusting-the-governments-certificate-chain) |
 | `nfse.certificate.trust-store-password` | `String` | — | No | Password of that trust store |
 | `nfse.emitter.cnpj` / `nfse.emitter.cpf` | `String` | — | One of | Federal id of the service provider; punctuation is ignored |
 | `nfse.emitter.municipal-registration` | `String` | — | No | `IM` — mandatory when the municipality keeps a complementary registry (rule E0125) |
@@ -208,6 +208,44 @@ fun nfseCertificateProvider(vault: VaultTemplate) =
 
 Whatever the source, the PKCS#12 is opened from a stream and **never written to disk** — a temporary file would
 survive a crash, show up for anyone with a shell in the container, and buy nothing.
+
+### Trusting the government's certificate chain
+
+The first real call may fail with:
+
+```
+PKIX path building failed: unable to find valid certification path to requested target
+```
+
+This is **not** your certificate: it is the JVM refusing the *server's*. The Sefin and the ADN present a chain
+issued by SERPRO and anchored on **GlobalSign Root R46**, and several JDK builds do not carry that root — JDK 21,
+for instance, ships GlobalSign R3, R4, R5 and R6, but not R46. `curl` on the same machine works, because it uses
+the operating system's trust store, which does have it.
+
+Add the root to a trust store and point the library at it:
+
+```bash
+# macOS: the root is already in the system keychain
+security find-certificate -a -c "GlobalSign Root R46" -p \
+  /System/Library/Keychains/SystemRootCertificates.keychain > globalsign-r46.pem
+# elsewhere: download it from https://valicert.globalsign.com/ (Root R46)
+
+keytool -importcert -noprompt -alias globalsign-root-r46 \
+  -file globalsign-r46.pem -keystore nfse-truststore.p12 -storetype PKCS12 -storepass changeit
+```
+
+```yaml
+nfse:
+  certificate:
+    trust-store-path: /etc/secrets/nfse-truststore.p12
+    trust-store-password: changeit
+```
+
+The configured store **adds to** the JDK's own roots; it does not replace them, so a store holding a single
+certificate does not break every other TLS call your application makes. That is the opposite of the JDK's default
+behaviour, and deliberate: the usual reason to configure a trust store here is one missing root.
+
+Alternatively, import the root into the JVM-wide `cacerts`, or use a JDK build that already carries it.
 
 ### The certificate expires in a year
 
@@ -469,6 +507,25 @@ curl -s localhost:8080/sample/nfse/<accessKey>/danfse -o danfse.pdf   # rendered
 
 Rejections come back with real codes (`E0014` duplicate DPS, `E0840` already cancelled, `E1235` schema, `E0714`
 signature). It exercises the library exactly as production does — only the fiscal rules of Anexo I are not there.
+
+### What restricted production can and cannot tell you
+
+Restricted production is the real service with real validation, and notes issued there have no fiscal value — but
+it is **not** a full mirror of production, and two limits stop a real emitter from reaching a successful emission:
+
+- **Not every municipality is there.** Ask before assuming: `nfse.municipalParameters.agreement(ibge)` answers
+  404 with *"o convênio do município … ainda não está ativo"* when it is not, and `POST /nfse` rejects with
+  **E0037**. Of the ones we checked, São Paulo, Rio de Janeiro, Belo Horizonte and Curitiba are active.
+- **You cannot borrow another municipality.** The Sefin cross-checks the emitter's CNPJ against the CNPJ and
+  CNC NFS-e registries and rejects with **E0084** when the establishment is not in the municipality the DPS
+  claims. Pointing `nfse.emitter.municipality-ibge` at an active municipality therefore does not help.
+
+Everything short of the generated note is still exercised, which is most of what a library integration can get
+wrong: mutual TLS, the signature, the XSD, the compression, and the whole rejection path with real codes. Rules
+worth knowing when reading a rejection: **E0312** (the national code is not administered by that municipality at
+that competence), **E0314** (same for the municipal complementary code — check `DtFim` in
+`municipalParameters.rates`), **E0120** (the municipal registration must be absent when the municipality keeps no
+complementary registry for you).
 
 ### Restricted production
 
