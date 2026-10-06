@@ -309,7 +309,11 @@ class NfseClientIntegrationTest {
                                 "NSU" to 1,
                                 "ChaveAcesso" to accessKey,
                                 "TipoDocumento" to "NFSE",
-                                "ArquivoXml" to GzipBase64.encode(TestXml.nfse()),
+                                // Deliberately not a full NFS-e: what matters is that the entry is filtered out
+                                // before anything parses it, and this would throw if it were not. Keeping it tiny
+                                // also keeps the stubbed body small — a large one makes this test flaky against
+                                // the 2 s read timeout.
+                                "ArquivoXml" to GzipBase64.encode("""<NFSe versao="1.01"><infNFSe/></NFSe>"""),
                                 "DataHoraGeracao" to "2026-09-20T12:00:00-03:00",
                             ),
                             mapOf(
