@@ -117,7 +117,7 @@ internal class DanfseLayout(
             )
         }
         canvas.rect(X4, top, W1, IDENTIFICATION_BOTTOM - top)
-        QrCode.draw(canvas, view.accessKey, QR_X, QR_Y, QR_SIZE)
+        QrCode.draw(canvas, view.accessKey, QrCode.Placement(QR_X, QR_Y, QR_SIZE), view.restrictedProduction)
         val note =
             canvas.wrap(
                 "A autenticidade desta NFS-e pode ser verificada pela leitura deste código QR ou pela consulta da " +

@@ -11,6 +11,8 @@ dependencies {
     implementation("org.apache.pdfbox:pdfbox:3.0.7")
     implementation("com.google.zxing:core:3.5.3")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    // Test only: reads the QR back out of the rendered page, so the URL inside it is asserted and not assumed.
+    testImplementation("com.google.zxing:javase:3.5.3")
 }
 
 tasks.named<Jar>("jar") {
