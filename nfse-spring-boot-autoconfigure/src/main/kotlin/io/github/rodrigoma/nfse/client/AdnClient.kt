@@ -24,10 +24,16 @@ internal class AdnClient(
     private val restClient: RestClient,
     private val baseUrl: String,
 ) {
+    /**
+     * `GET /NFSe/{chave}/Eventos`. The lote carries **the NFS-e itself** besides any events — a note with no
+     * events still comes back with one `TipoDocumento = NFSE` entry — so only the event documents are parsed.
+     * Taking everything would fail with "Not an event document: infEvento is missing" on the common case.
+     */
     fun events(accessKey: String): List<NfseEvent> {
         val response = fetch(uri(NfseApiPaths.ADN_EVENTS.replace("{chaveAcesso}", accessKey)))
         return response.loteDFe
             .orEmpty()
+            .filter { DistributedDocumentType.fromWire(it.tipoDocumento) == DistributedDocumentType.EVENT }
             .mapNotNull { it.arquivoXml }
             .map { NfseXmlParser.parseEvent(GzipBase64.decode(it)) }
     }

@@ -22,6 +22,8 @@ class FormatsTest {
         assertThat(Formats.cpf("12345678909")).isEqualTo("123.456.789-09")
         assertThat(Formats.cpf("1")).isEqualTo("1")
         assertThat(Formats.cep("01310100")).isEqualTo("01310-100")
+        // The Sefin returns the CEP from the CNPJ registry without leading zeros; a real note came back like this.
+        assertThat(Formats.cep("9571300")).isEqualTo("09571-300")
         assertThat(Formats.cep("x")).isEqualTo("x")
         assertThat(Formats.nationalTaxCode("010701")).isEqualTo("01.07.01")
         assertThat(Formats.nationalTaxCode("1")).isEqualTo("1")
