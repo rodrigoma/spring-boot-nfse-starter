@@ -6,6 +6,7 @@ import io.github.rodrigoma.nfse.model.dps.FederalId
 import io.github.rodrigoma.nfse.model.dps.MunicipalTax
 import io.github.rodrigoma.nfse.model.dps.Person
 import io.github.rodrigoma.nfse.model.dps.Taxes
+import io.github.rodrigoma.nfse.model.dps.TotalTaxes
 import io.github.rodrigoma.nfse.model.event.CancellationReason
 import io.github.rodrigoma.nfse.model.event.NfseEvent
 import io.github.rodrigoma.nfse.model.request.DpsRequest
@@ -47,6 +48,8 @@ class NfseSampleController(
         val description: String,
         val amount: BigDecimal,
         val rate: BigDecimal? = null,
+        /** `pTotTribSN` — required for a Simples Nacional ME/EPP provider (rule E0712). */
+        val simplesNacionalPercentage: BigDecimal? = null,
     )
 
     data class CancelRequest(
@@ -72,7 +75,14 @@ class NfseSampleController(
                 amounts =
                     Amounts(
                         serviceAmount = demo.amount,
-                        taxes = Taxes(municipal = MunicipalTax(rate = demo.rate)),
+                        taxes =
+                            Taxes(
+                                municipal = MunicipalTax(rate = demo.rate),
+                                total =
+                                    demo.simplesNacionalPercentage
+                                        ?.let { TotalTaxes.SimplesNacionalPercentage(it) }
+                                        ?: TotalTaxes.NotInformed,
+                            ),
                     ),
             ),
         )

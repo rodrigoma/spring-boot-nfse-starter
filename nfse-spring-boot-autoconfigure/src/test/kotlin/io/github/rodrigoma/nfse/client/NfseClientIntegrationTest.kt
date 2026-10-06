@@ -303,6 +303,15 @@ class NfseClientIntegrationTest {
                     "StatusProcessamento" to "DOCUMENTOS_LOCALIZADOS",
                     "LoteDFe" to
                         listOf(
+                            // The ADN puts the NFS-e itself in this lote; parsing it as an event is what the real
+                            // service made the client do before — "Not an event document: infEvento is missing".
+                            mapOf(
+                                "NSU" to 1,
+                                "ChaveAcesso" to accessKey,
+                                "TipoDocumento" to "NFSE",
+                                "ArquivoXml" to GzipBase64.encode(TestXml.nfse()),
+                                "DataHoraGeracao" to "2026-09-20T12:00:00-03:00",
+                            ),
                             mapOf(
                                 "NSU" to 7,
                                 "ChaveAcesso" to accessKey,

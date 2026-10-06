@@ -32,7 +32,15 @@ internal object Formats {
 
     fun cpf(value: String): String = mask(value, "###.###.###-##")
 
-    fun cep(value: String): String = mask(value, "#####-###")
+    /**
+     * `09571-300`. The CEP is padded to eight digits first: the Sefin returns it from the CNPJ registry **without
+     * leading zeros** (a real NFS-e came back with `<CEP>9571300</CEP>` for a São Caetano do Sul address), and
+     * printing that raw makes a correct document look broken. Padding changes the presentation, never the value.
+     */
+    fun cep(value: String): String {
+        val digits = value.all(Char::isDigit) && value.length <= CEP_DIGITS
+        return mask(if (digits) value.padStart(CEP_DIGITS, '0') else value, "#####-###")
+    }
 
     /** `nn.nn.nn` for the national code. */
     fun nationalTaxCode(value: String): String = mask(value, "##.##.##")
@@ -41,6 +49,8 @@ internal object Formats {
     fun nbs(value: String): String = mask(value, "#.####.##.##")
 
     /** Applies [pattern] (`#` = one character) when [value] has exactly as many characters as the pattern expects. */
+    private const val CEP_DIGITS = 8
+
     private fun mask(
         value: String,
         pattern: String,
