@@ -79,7 +79,9 @@ docs/superpowers/specs/           design notes
 - **The DANFSe is a pure function of the `NFSe` XML + events.** `NfseView` reads the DOM by local name and formats
   every value (`-` for empty ones); `DanfseLayout` only positions. Nothing is computed from application state, the
   core module never depends on PDFBox (`DanfsePdfRenderer` is the seam) and the layout constants are the cm of
-  NT 008 — change them only against the NT.
+  NT 008 — change them only against the NT. The single deliberate deviation is the **QR Code URL in restricted
+  production** (`QrCode.RESTRICTED_QUERY_URL`): the NT names one address, but a `tpAmb = 2` note exists only in
+  that environment and the prescribed URL would answer "not found". Keep it documented wherever it is touched.
 - **Four certificate sources, one at a time.** `location` (Resource), `base64`, `ssl-bundle`, or an
   `NfseCertificateProvider` bean — which wins over the properties, so the "exactly one source" check lives in
   `NfseCertificate.load`, not in `NfseProperties.afterPropertiesSet` (only the loader knows the bean exists).

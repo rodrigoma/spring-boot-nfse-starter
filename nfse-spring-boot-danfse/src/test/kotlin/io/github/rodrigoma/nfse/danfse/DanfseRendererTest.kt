@@ -1,9 +1,14 @@
 package io.github.rodrigoma.nfse.danfse
 
+import com.google.zxing.BinaryBitmap
+import com.google.zxing.MultiFormatReader
+import com.google.zxing.client.j2se.BufferedImageLuminanceSource
+import com.google.zxing.common.HybridBinarizer
 import io.github.rodrigoma.nfse.model.event.NfseEvent
 import io.github.rodrigoma.nfse.xml.NfseXmlParser
 import org.apache.pdfbox.Loader
 import org.apache.pdfbox.pdmodel.PDDocument
+import org.apache.pdfbox.rendering.PDFRenderer
 import org.apache.pdfbox.text.PDFTextStripper
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
@@ -16,6 +21,25 @@ class DanfseRendererTest {
 
     /** The page text without any whitespace: the rotated watermark is extracted in pieces. */
     private fun watermarkText(pdf: ByteArray): String = rawText(pdf).replace(Regex("\\s"), "")
+
+    /**
+     * The QR is drawn as vector squares, so decode it from a raster of the page — cropped to the region NT 008
+     * fixes for it (X 17.48 cm, Y 1.67 cm, 1.52 cm), since the detector loses a small code in a full A4 page.
+     */
+    private fun urlInQr(pdf: ByteArray): String =
+        Loader.loadPDF(pdf).use { document ->
+            val page = PDFRenderer(document).renderImageWithDPI(0, QR_DPI)
+            val px = { cm: Float -> (cm / CM_PER_INCH * QR_DPI).toInt() }
+            val crop =
+                page.getSubimage(
+                    px(QR_X_CM) - QR_MARGIN,
+                    px(QR_Y_CM) - QR_MARGIN,
+                    px(QR_SIZE_CM) + 2 * QR_MARGIN,
+                    px(QR_SIZE_CM) + 2 * QR_MARGIN,
+                )
+            val bitmap = BinaryBitmap(HybridBinarizer(BufferedImageLuminanceSource(crop)))
+            MultiFormatReader().decode(bitmap).text
+        }
 
     private fun rawText(pdf: ByteArray): String = Loader.loadPDF(pdf).use { PDFTextStripper().getText(it) }
 
@@ -141,6 +165,16 @@ class DanfseRendererTest {
     }
 
     @Test
+    fun `the QR of a restricted-production note points at that environment`() {
+        // Fixtures: the minimal note is tpAmb = 2, the complete one tpAmb = 1.
+        assertThat(Fixtures.minimal).contains("<tpAmb>2</tpAmb>")
+        assertThat(Fixtures.complete).contains("<tpAmb>1</tpAmb>")
+
+        assertThat(urlInQr(renderer.render(Fixtures.minimal))).startsWith("https://www.producaorestrita.nfse.gov.br/")
+        assertThat(urlInQr(renderer.render(Fixtures.complete))).startsWith("https://www.nfse.gov.br/")
+    }
+
+    @Test
     fun `draws the watermark for cancelled and substituted notes`() {
         val cancelled = renderer.render(Fixtures.minimal, NoteStatus.CANCELLED)
         val substituted = renderer.render(Fixtures.complete, NoteStatus.SUBSTITUTED)
@@ -181,5 +215,15 @@ class DanfseRendererTest {
         val pdf = DanfseRenderer(DanfseOptions(stub = true)).render(huge, NoteStatus.SUBSTITUTED)
         document(pdf).use { assertThat(it.numberOfPages).isEqualTo(1) }
         assertThat(text(pdf)).contains("…").contains("Totais Aproximados dos Tributos")
+    }
+
+    private companion object {
+        /** Enough resolution for the 1.52 cm QR to decode. */
+        const val QR_DPI = 300f
+        const val CM_PER_INCH = 2.54f
+        const val QR_X_CM = 17.48f
+        const val QR_Y_CM = 1.67f
+        const val QR_SIZE_CM = 1.52f
+        const val QR_MARGIN = 12
     }
 }

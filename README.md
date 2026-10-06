@@ -419,6 +419,12 @@ one A4 page with the fixed model of Anexo I of the NT, the QR Code of the public
 JURÍDICA" in restricted production and the CANCELADA / SUBSTITUÍDA watermark when the events say so. Everything
 printed comes from the `NFSe` XML, so the same XML always gives the same PDF; nothing is stored.
 
+One deliberate departure from the letter of the NT: for a note issued in **restricted production** (`tpAmb = 2`)
+the QR Code points at `https://www.producaorestrita.nfse.gov.br/ConsultaPublica/…` instead of the single address
+the NT names. A test note exists only in that environment, so the prescribed URL answers "not found" and suggests
+to whoever scans it that the emission failed. The document already carries "NFS-e SEM VALIDADE JURÍDICA", so
+nothing legally binding points anywhere new. Production notes are unaffected.
+
 ```kotlin
 val pdf = nfse.danfse(accessKey)                     // Nfse + events → PDF, no ADN call
 
