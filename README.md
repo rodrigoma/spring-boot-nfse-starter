@@ -673,6 +673,22 @@ git push origin v1.0.0-RC1
 ```
 
 Secrets used: `SIGNING_KEY`, `SIGNING_PASSWORD`, `OSSRH_USERNAME`, `OSSRH_PASSWORD` (Central Portal user token).
+Without them `signMavenJavaPublication` stops the release with a message naming the ones that are missing, before
+anything is uploaded. Setting them up once, from a fresh clone or a fork:
+
+```bash
+gpg --full-generate-key                                          # if you have no signing key yet
+gpg --keyserver keyserver.ubuntu.com --send-keys <key-id>        # Central validates against the public key
+gpg --armor --export-secret-keys <key-id> | gh secret set SIGNING_KEY
+gh secret set SIGNING_PASSWORD                                   # typed at the prompt
+gh secret set OSSRH_USERNAME                                     # Central Portal user token, not the login
+gh secret set OSSRH_PASSWORD
+```
+
+One GPG key and one Central Portal token serve every library of the same account — the token is per account, not
+per namespace, and generating a new one **invalidates the previous**, so reuse the values across repositories
+rather than regenerating. Actions secrets are per repository, and the namespace (`io.github.rodrigoma`) has to be
+verified in the Portal.
 
 ## License
 
