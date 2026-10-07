@@ -82,6 +82,12 @@ docs/superpowers/specs/           design notes
   NT 008 — change them only against the NT. The single deliberate deviation is the **QR Code URL in restricted
   production** (`QrCode.RESTRICTED_QUERY_URL`): the NT names one address, but a `tpAmb = 2` note exists only in
   that environment and the prescribed URL would answer "not found". Keep it documented wherever it is touched.
+- **The IBS/CBS element names are read twice, on purpose.** `NfseIbsCbsParser` (core) returns `BigDecimal`s on
+  `Nfse.ibsCbs` for applications; `NfseView` (DANFSe) formats strings for the PDF. Unifying them would make the
+  PDF depend on the parsed model and cost the "pure function of the XML" property, so the duplication stays —
+  but both read **direct children**: `pIBSUF`, `vIBSUF`, `pIBSMun`, `vIBSMun`, `pCBS` and `vCBS` appear under
+  `gIBSUFTot`/`gIBSMunTot`/`gCBS` *and* under `gTribCompraGov`, so `firstText`/`getElementsByTagNameNS` reads
+  the wrong group. Use `childElement`/`childText`/`childDecimal`.
 - **Four certificate sources, one at a time.** `location` (Resource), `base64`, `ssl-bundle`, or an
   `NfseCertificateProvider` bean — which wins over the properties, so the "exactly one source" check lives in
   `NfseCertificate.load`, not in `NfseProperties.afterPropertiesSet` (only the loader knows the bean exists).

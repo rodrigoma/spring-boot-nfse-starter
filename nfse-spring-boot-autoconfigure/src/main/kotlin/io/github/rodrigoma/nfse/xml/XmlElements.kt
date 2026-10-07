@@ -59,3 +59,18 @@ internal fun Element.date(
     name: String,
     value: LocalDate,
 ): Element = text(name, XmlSupport.formatDate(value))
+
+/** Direct child elements, in document order. */
+internal fun Element.childElements(): List<Element> =
+    (0 until childNodes.length).mapNotNull { childNodes.item(it) as? Element }
+
+/**
+ * Direct child named [name], or `null`. Unlike [firstElement] this never descends: the NFS-e repeats element
+ * names across groups — `pIBSUF` and `vIBSUF` appear under both `gIBSUFTot` and `gTribCompraGov` — so a
+ * descendant lookup would read a value from the wrong group.
+ */
+internal fun Element.childElement(name: String): Element? = childElements().firstOrNull { it.localName == name }
+
+internal fun Element.childText(name: String): String? = childElement(name)?.textContent?.takeIf { it.isNotEmpty() }
+
+internal fun Element.childDecimal(name: String): BigDecimal? = XmlSupport.parseDecimal(childText(name))

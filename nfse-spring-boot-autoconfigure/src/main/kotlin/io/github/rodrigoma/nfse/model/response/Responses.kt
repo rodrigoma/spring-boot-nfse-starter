@@ -13,6 +13,7 @@ import java.time.OffsetDateTime
  * @property statusCode `cStat` (`100` generated, `102` judicial decision, `103` avulsa, `107` MEI).
  * @property dpsId `Id` of the DPS embedded in the note.
  * @property netAmount `vLiq`.
+ * @property ibsCbs `IBSCBS` computed by the Sefin, `null` while the note carries no tax-reform group.
  * @property xml The complete `NFSe` XML for the application to keep.
  */
 data class Nfse(
@@ -26,6 +27,7 @@ data class Nfse(
     val calculationBase: BigDecimal? = null,
     val appliedRate: BigDecimal? = null,
     val issqnAmount: BigDecimal? = null,
+    val ibsCbs: NfseIbsCbs? = null,
     val xml: String,
 )
 

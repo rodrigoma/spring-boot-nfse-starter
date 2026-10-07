@@ -348,7 +348,9 @@ CNPJs). The provider's name is never written when the provider emits — rule E0
 `FederalId.Nif("…")` or `FederalId.NoNif(reason)` and a foreign `Address`. To replace a note, set
 `substitution = Substitution(substitutedAccessKey, SubstitutionReason.OTHER, "justification…")` — the Sefin cancels
 the old note by substitution and returns the new one. The optional IBS/CBS group (tax reform) is available as
-`ibsCbs = IbsCbs(...)`.
+`ibsCbs = IbsCbs(...)`, and the values the Sefin computes from it come back typed on `Nfse.ibsCbs` — base,
+effective rates per sphere, `vIBSUF`/`vIBSMun`/`vCBS`, presumed credits and `vTotNF` — `null` while a note
+carries no group.
 
 Everything the layout allows is modelled: `nfse.emit(dps: Dps)` takes the full `Dps` (deductions with documents,
 foreign trade, constructions, events, federal taxes, municipal benefits, suspended enforceability, DPS issued by the
@@ -651,7 +653,8 @@ What the standard is doing around this release — details and check history in
 
 - **CNPJ alfanumérico** in production since 2026-08-10 (XSD bundle 2026-07-27, embedded here).
 - **IBS/CBS** (`IBSCBS` group): omission is tolerated until 2026-12-31; highlighting becomes mandatory in waves
-  from **2026-10-01** (LC 116 services in general). Model it with `DpsRequest.ibsCbs`.
+  from **2026-10-01** (LC 116 services in general). Send it with `DpsRequest.ibsCbs`, read the computed
+  values back from `Nfse.ibsCbs`.
 - **Simples Nacional** emitters must use the national emitter from **2026-11-01** (Resolução CGSN 191).
 - **NT 008/2026**: official DANFSe generation suspended on 2026-08-03; single national PDF layout to be rendered
   by emitters — implemented by `nfse-spring-boot-danfse`.
