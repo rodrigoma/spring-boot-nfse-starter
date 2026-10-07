@@ -15,7 +15,8 @@
 - **IBS/CBS**: per CGNFS-e guidance of 2026-08-07, omission of the `IBSCBS` group does **not** reject the NFS-e
   until 2026-12-31 (but is a compliance breach); mandatory highlighting in waves — **2026-10-01** (LC 116 services
   in general), **2026-12-01** (digital platforms, sub-items 1.03/1.05/1.09/16.01, intangible goods, condominiums,
-  rentals), **2027-01-01** (Simples Nacional opt-ins). The model covers the whole group (`DpsRequest.ibsCbs`).
+  rentals), **2027-01-01** (Simples Nacional opt-ins). The model covers the whole group (`DpsRequest.ibsCbs`)
+  and the values the Sefin computes from it are parsed back into `Nfse.ibsCbs`.
 - **Simples Nacional**: mandatory emission through the national emitter postponed to **2026-11-01**
   (Resolução CGSN 191 of 2026-08-04).
 - **NT 008/2026** (DANFSe v2.0): the official PDF service was **suspended on 2026-08-03**; emitters render the
